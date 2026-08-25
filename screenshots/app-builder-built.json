@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Vaani",
+      "hasCanvas": false,
+      "bodyTextLen": 1327,
+      "bodyTextHash": "73c4c88358515a3bd82d5de85e4d253f610062fdb9f4fab915ab5cf74eebb1e7",
+      "bodyTextPrefix": "Vaani Voice orders Customer Vendor FOR EVERY SHOP Speak the orde",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Vaani",
+      "hasCanvas": false,
+      "bodyTextLen": 1314,
+      "bodyTextHash": "61862141e0c3ec84e7e1456b377c4a31b1323d1b49717f30fd67a6c3f7e6a61b",
+      "bodyTextPrefix": "Vaani Customer Vendor FOR EVERY SHOP Speak the order. Skip the w",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

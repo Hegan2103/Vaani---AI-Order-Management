@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #f4efe6;
+  --color-surface: #fffdf8;
+  --color-ink: #171512;
+  --color-muted: #6b645a;
+  --color-subtle: #9a9288;
+  --color-line: color-mix(in oklab, #171512 12%, transparent);
+  --color-line-strong: color-mix(in oklab, #171512 22%, transparent);
+  --color-accent: #2a5d55;
+  --color-accent-fg: #f4efe6;
+  --color-accent-soft: #e4efe9;
+  --color-danger: #8f3d32;
+  --color-warn: #8a5a2b;
+  --color-ok: #2f6a45;
+  --font-display: "Fraunces", "Times New Roman", serif;
+  --font-sans: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+}
+
+@keyframes vaani-ring {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+
+@keyframes vaani-spin {
+  to { transform: rotate(360deg); }
+}
+
+.vaani-listen-ring {
+  animation: vaani-ring 1.25s ease-out infinite;
+}
+
+.vaani-spin {
+  animation: vaani-spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}

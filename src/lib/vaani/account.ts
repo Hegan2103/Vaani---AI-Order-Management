@@ -1,0 +1,634 @@
+import { randomBytes } from "node:crypto";
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/lib/auth/middleware";
+import { getSql, type Sql } from "@/lib/db";
+import { demoIncomingForIndustry, inboxIdForUser, phoneDigits } from "./seed";
+import type { Industry, Role, Ticket, Vendor } from "./types";
+
+function digits(phone: string) {
+  const d = phone.replace(/\D/g, "");
+  if (d.length === 12 && d.startsWith("91")) return d.slice(2);
+  if (d.length === 11 && d.startsWith("0")) return d.slice(1);
+  return d;
+}
+
+function phoneEmail(ten: string) {
+  return `91${ten}@phone.vaani.app`;
+}
+
+async function ensureVaaniSchema(sql: Sql) {
+  await sql.query(`
+    create table if not exists vaani_otp (
+      phone text primary key,
+      code_hash text not null,
+      expires_at timestamptz not null,
+      attempts int not null default 0
+    )
+  `);
+  await sql.query(`
+    create table if not exists vaani_profiles (
+      user_id text primary key,
+      shop_name text not null default '',
+      phone text not null default '',
+      role text not null default 'customer'
+    )
+  `);
+  await sql.query(`alter table vaani_profiles add column if not exists vendor_id text not null default ''`);
+  await sql.query(`alter table vaani_profiles add column if not exists industry text not null default ''`);
+  await sql.query(`alter table vaani_profiles add column if not exists is_vendor boolean not null default false`);
+  await sql.query(`alter table vaani_profiles add column if not exists language text not null default 'hi-IN'`);
+  await sql.query(`
+    create table if not exists vaani_tickets (
+      id text primary key,
+      user_id text not null,
+      vendor_id text not null default '',
+      payload jsonb not null,
+      created_at timestamptz not null default now()
+    )
+  `);
+  await sql.query(`alter table vaani_tickets add column if not exists customer_phone text not null default ''`);
+  await sql.query(`create index if not exists vaani_tickets_user_idx on vaani_tickets (user_id)`);
+  await sql.query(`create index if not exists vaani_tickets_vendor_idx on vaani_tickets (vendor_id)`);
+}
+
+async function createPhoneSession(ten: string) {
+  const sql = await getSql();
+  await ensureVaaniSchema(sql);
+  const email = phoneEmail(ten);
+  const phone = `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`;
+  const name = `Shop ${ten}`;
+  const userId = `vaani-${ten}`;
+  const sessionToken = randomBytes(32).toString("base64url");
+  const sessionId = randomBytes(16).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const existing = await sql.query<{ id: string }>(`select id from "user" where email = $1`, [email]);
+  const uid = existing[0]?.id || userId;
+  if (!existing[0]) {
+    await sql.query(
+      `insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+       values ($1, $2, $3, true, now(), now())`,
+      [uid, name, email],
+    );
+  } else {
+    await sql.query(`update "user" set name = $1, "updatedAt" = now() where id = $2`, [name, uid]);
+  }
+  await sql.query(
+    `insert into "session" (id, "expiresAt", token, "createdAt", "updatedAt", "userId")
+     values ($1, $2::timestamptz, $3, now(), now(), $4)`,
+    [sessionId, expiresAt, sessionToken, uid],
+  );
+  return { token: sessionToken, email, phone, name };
+}
+
+export const signInWithMobile = createServerFn({ method: "POST" })
+  .validator((input: { phone: string }) => input)
+  .handler(async ({ data }) => {
+    const ten = digits(data.phone);
+    if (ten.length !== 10) return { ok: false as const, error: "Enter a 10-digit Indian mobile number." };
+    try {
+      const session = await createPhoneSession(ten);
+      return { ok: true as const, ...session };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not start session.";
+      return { ok: false as const, error: msg };
+    }
+  });
+
+export const loadProfile = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql<{
+      shop_name: string;
+      phone: string;
+      role: string;
+      vendor_id: string;
+      industry: string;
+      is_vendor: boolean | string | number;
+      language: string;
+    }>`
+      select shop_name, phone, role, vendor_id, industry, is_vendor, language
+      from vaani_profiles where user_id = ${context.userId}
+    `;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      ...row,
+      is_vendor: row.is_vendor === true || row.is_vendor === "t" || row.is_vendor === "true" || row.is_vendor === 1,
+      language: row.language || "hi-IN",
+    };
+  });
+
+function parseTicket(payload: Ticket | string): Ticket {
+  return typeof payload === "string" ? (JSON.parse(payload) as Ticket) : payload;
+}
+
+export const loadAccount = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { phone?: string } = {}) => input ?? {})
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+
+    let emailTen = digits(data?.phone ?? "");
+    if (emailTen.length === 12 && emailTen.startsWith("91")) emailTen = emailTen.slice(2);
+    if (emailTen.length !== 10) {
+      try {
+        const users = await sql.query<{ email: string }>(`select email from "user" where id = $1`, [context.userId]);
+        emailTen = digits(users[0]?.email ?? "");
+        if (emailTen.length === 12 && emailTen.startsWith("91")) emailTen = emailTen.slice(2);
+      } catch {
+        emailTen = "";
+      }
+    }
+
+    const profiles = await sql.query<{
+      user_id: string;
+      shop_name: string;
+      phone: string;
+      role: string;
+      vendor_id: string;
+      industry: string;
+      is_vendor: boolean | string | number;
+      language: string;
+    }>(`select user_id, shop_name, phone, role, vendor_id, industry, is_vendor, language from vaani_profiles`);
+
+    const asFlag = (v: boolean | string | number) =>
+      v === true || v === "t" || v === "true" || v === 1;
+
+    const tenOf = (value: string) => {
+      const d = digits(value);
+      if (d.length === 12 && d.startsWith("91")) return d.slice(2);
+      return d.length >= 10 ? d.slice(-10) : d;
+    };
+
+    const mine = profiles.filter((p) => p.user_id === context.userId);
+    const byPhone = emailTen
+      ? profiles.filter((p) => {
+          const t = digits(p.phone);
+          const ten = t.length === 12 && t.startsWith("91") ? t.slice(2) : t;
+          return ten === emailTen;
+        })
+      : [];
+    const richest =
+      [...mine, ...byPhone].sort((a, b) => (b.shop_name?.trim().length ?? 0) - (a.shop_name?.trim().length ?? 0))[0] ??
+      null;
+
+    if (richest && richest.user_id !== context.userId && richest.shop_name.trim()) {
+      const newInbox = inboxIdForUser(context.userId);
+      const oldInbox = richest.vendor_id || inboxIdForUser(richest.user_id);
+      await sql.query(
+        `insert into vaani_profiles (user_id, shop_name, phone, role, vendor_id, industry, is_vendor, language)
+         values ($1, $2, $3, $4, $5, $6, $7::boolean, $8)
+         on conflict (user_id) do update set
+           shop_name = case when vaani_profiles.shop_name = '' then excluded.shop_name else vaani_profiles.shop_name end,
+           phone = case when vaani_profiles.phone = '' then excluded.phone else vaani_profiles.phone end,
+           industry = case when vaani_profiles.industry = '' then excluded.industry else vaani_profiles.industry end,
+           is_vendor = vaani_profiles.is_vendor or excluded.is_vendor,
+           vendor_id = case when vaani_profiles.vendor_id = '' then excluded.vendor_id else vaani_profiles.vendor_id end,
+           language = excluded.language`,
+        [
+          context.userId,
+          richest.shop_name,
+          richest.phone,
+          richest.role,
+          richest.vendor_id || newInbox,
+          richest.industry,
+          asFlag(richest.is_vendor) ? "true" : "false",
+          richest.language || "hi-IN",
+        ],
+      );
+      await sql.query(`update vaani_tickets set user_id = $1 where user_id = $2`, [context.userId, richest.user_id]);
+      if (oldInbox && oldInbox !== newInbox) {
+        await sql.query(`update vaani_tickets set vendor_id = $1 where vendor_id = $2`, [newInbox, oldInbox]);
+      }
+    }
+
+    const latest = await sql.query<{
+      shop_name: string;
+      phone: string;
+      role: string;
+      vendor_id: string;
+      industry: string;
+      is_vendor: boolean | string | number;
+      language: string;
+    }>(
+      `select shop_name, phone, role, vendor_id, industry, is_vendor, language from vaani_profiles where user_id = $1`,
+      [context.userId],
+    );
+    const row = latest[0] ?? richest;
+    const profile = row
+      ? {
+          shop_name: row.shop_name,
+          phone: row.phone,
+          role: row.role,
+          vendor_id: row.vendor_id,
+          industry: row.industry,
+          is_vendor: asFlag(row.is_vendor),
+          language: row.language || "hi-IN",
+        }
+      : null;
+
+    const vendorId = profile?.vendor_id || inboxIdForUser(context.userId);
+    const relatedIds = new Set<string>([context.userId, ...byPhone.map((p) => p.user_id)]);
+    if (richest?.user_id) relatedIds.add(richest.user_id);
+    try {
+      const authUsers = await sql.query<{ id: string; email: string }>(`select id, email from "user"`);
+      for (const u of authUsers) {
+        if (emailTen && tenOf(u.email) === emailTen) relatedIds.add(u.id);
+      }
+    } catch {
+      /* user table may not exist yet */
+    }
+    const ticketRows = await sql.query<{ user_id: string; vendor_id: string; payload: Ticket | string; customer_phone?: string }>(
+      `select user_id, vendor_id, payload, customer_phone from vaani_tickets`,
+    );
+    const parsed = ticketRows.map((r) => ({
+      user_id: r.user_id,
+      vendor_id: r.vendor_id,
+      ticket: parseTicket(r.payload),
+    }));
+    const tickets = parsed
+      .filter((r) => {
+        if (relatedIds.has(r.user_id)) return true;
+        if (!emailTen) return false;
+        return tenOf(r.ticket.customerPhone || "") === emailTen;
+      })
+      .map((r) => r.ticket);
+    const inboxIds = new Set<string>([vendorId, ...byPhone.map((p) => p.vendor_id).filter(Boolean)]);
+    if (richest?.vendor_id) inboxIds.add(richest.vendor_id);
+    const incoming = parsed
+      .filter((r) => inboxIds.has(r.vendor_id))
+      .filter((r) => !emailTen || tenOf(r.ticket.customerPhone || "") !== emailTen)
+      .map((r) => r.ticket);
+
+    return {
+      userId: context.userId,
+      profile,
+      tickets,
+      incoming,
+    };
+  });
+
+export const saveProfile = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(
+    (input: {
+      shopName: string;
+      phone: string;
+      role: Role;
+      vendorId?: string;
+      industry?: string;
+      isVendor?: boolean;
+      language?: string;
+    }) => input,
+  )
+  .handler(async ({ context, data }) => {
+    const shopName = data.shopName.trim();
+    if (!shopName) return { ok: false as const, error: "Shop name cannot be empty." };
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const existing = await sql<{ phone: string }>`
+      select phone from vaani_profiles where user_id = ${context.userId}
+    `;
+    const phone = data.phone.trim() || existing[0]?.phone || "";
+    const vendorId = data.isVendor ? inboxIdForUser(context.userId) : (data.vendorId ?? "");
+    const industry = data.industry ?? "";
+    const flag = data.isVendor ? "true" : "false";
+    const language = data.language || "hi-IN";
+    try {
+      await sql.query(
+        `insert into vaani_profiles (user_id, shop_name, phone, role, vendor_id, industry, is_vendor, language)
+         values ($1, $2, $3, $4, $5, $6, $7::boolean, $8)
+         on conflict (user_id) do update set
+           shop_name = excluded.shop_name,
+           phone = excluded.phone,
+           role = excluded.role,
+           industry = excluded.industry,
+           is_vendor = excluded.is_vendor,
+           vendor_id = excluded.vendor_id,
+           language = excluded.language`,
+        [context.userId, shopName, phone, data.role, vendorId, industry, flag, language],
+      );
+      return { ok: true as const, vendorId };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not save shop details.";
+      return { ok: false as const, error: msg };
+    }
+  });
+
+export const saveLanguage = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { language: string }) => input)
+  .handler(async ({ context, data }) => {
+    const language = data.language.trim() || "hi-IN";
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    await sql.query(
+      `insert into vaani_profiles (user_id, shop_name, phone, role, vendor_id, industry, is_vendor, language)
+       values ($1, '', '', 'customer', '', '', false, $2)
+       on conflict (user_id) do update set language = excluded.language`,
+      [context.userId, language],
+    );
+    return { ok: true as const };
+  });
+
+export const rememberLoginPhone = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { phone: string }) => input)
+  .handler(async ({ context, data }) => {
+    const ten = phoneDigits(data.phone);
+    if (ten.length !== 10) return { ok: false as const };
+    const formatted = `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`;
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const existing = await sql.query<{
+      user_id: string;
+      shop_name: string;
+      phone: string;
+      role: string;
+      vendor_id: string;
+      industry: string;
+      is_vendor: boolean | string | number;
+      language: string;
+    }>(`select user_id, shop_name, phone, role, vendor_id, industry, is_vendor, language from vaani_profiles`);
+    const match = existing.find((p) => {
+      const t = digits(p.phone);
+      const pten = t.length === 12 && t.startsWith("91") ? t.slice(2) : t;
+      return pten === ten && Boolean(p.shop_name?.trim());
+    });
+    const shop = match?.shop_name ?? "";
+    const industry = match?.industry ?? "";
+    const role = match?.role || "customer";
+    const isVendor = match
+      ? match.is_vendor === true || match.is_vendor === "t" || match.is_vendor === "true" || match.is_vendor === 1
+      : false;
+    const language = match?.language || "hi-IN";
+    const vendorId = match?.vendor_id || (isVendor ? inboxIdForUser(context.userId) : "");
+    await sql.query(
+      `insert into vaani_profiles (user_id, shop_name, phone, role, vendor_id, industry, is_vendor, language)
+       values ($1, $2, $3, $4, $5, $6, $7::boolean, $8)
+       on conflict (user_id) do update set
+         phone = case when vaani_profiles.phone = '' then excluded.phone else vaani_profiles.phone end,
+         shop_name = case when vaani_profiles.shop_name = '' then excluded.shop_name else vaani_profiles.shop_name end,
+         industry = case when vaani_profiles.industry = '' then excluded.industry else vaani_profiles.industry end,
+         is_vendor = vaani_profiles.is_vendor or excluded.is_vendor,
+         vendor_id = case when vaani_profiles.vendor_id = '' then excluded.vendor_id else vaani_profiles.vendor_id end`,
+      [context.userId, shop, formatted, role, vendorId, industry, isVendor ? "true" : "false", language],
+    );
+    if (match && match.user_id !== context.userId) {
+      await sql.query(`update vaani_tickets set user_id = $1 where user_id = $2`, [context.userId, match.user_id]);
+    }
+    return { ok: true as const, phone: formatted };
+  });
+
+export const listRegisteredVendors = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async () => {
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql.query<{
+      user_id: string;
+      shop_name: string;
+      phone: string;
+      industry: string;
+      is_vendor: boolean | string | number;
+      vendor_id: string;
+      email: string | null;
+    }>(
+      `select p.user_id, p.shop_name, p.phone, p.industry, p.is_vendor, p.vendor_id, u.email
+       from vaani_profiles p
+       left join "user" u on u.id = p.user_id`,
+    );
+    const trades: Industry[] = [
+      "pharmaceutical",
+      "grocery",
+      "electrical",
+      "hardware",
+      "construction",
+      "electronics",
+    ];
+    const out: Vendor[] = [];
+    for (const r of rows) {
+      const emailTen = (r.email ?? "").match(/^91(\d{10})@/i)?.[1] ?? "";
+      const ten = phoneDigits(r.phone) || emailTen;
+      if (ten.length !== 10) continue;
+      const listed =
+        r.is_vendor === true ||
+        r.is_vendor === "t" ||
+        r.is_vendor === "true" ||
+        r.is_vendor === 1 ||
+        Boolean(r.shop_name?.trim()) ||
+        Boolean(r.vendor_id);
+      if (!listed && !emailTen) continue;
+      const industry = trades.includes(r.industry as Industry) ? (r.industry as Industry) : "grocery";
+      const id = r.vendor_id || inboxIdForUser(r.user_id);
+      const display = r.shop_name.trim() || `Shop ${ten}`;
+      out.push({
+        id,
+        name: display,
+        shop: display,
+        phone: r.phone || `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`,
+        city: "",
+        industry,
+        catalog: [],
+        altPhones: [`+91${ten}`, `91${ten}`, ten, `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`],
+      });
+    }
+    const users = await sql.query<{ id: string; email: string; name: string }>(
+      `select id, email, name from "user"`,
+    );
+    const seen = new Set(out.flatMap((v) => (v.altPhones ?? []).map((p) => phoneDigits(p))));
+    for (const u of users) {
+      const ten = (u.email ?? "").match(/^91(\d{10})@/i)?.[1] ?? "";
+      if (ten.length !== 10 || seen.has(ten)) continue;
+      seen.add(ten);
+      out.push({
+        id: inboxIdForUser(u.id),
+        name: u.name || `Shop ${ten}`,
+        shop: u.name || `Shop ${ten}`,
+        phone: `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`,
+        city: "",
+        industry: "grocery",
+        catalog: [],
+        altPhones: [`+91${ten}`, `91${ten}`, ten],
+      });
+    }
+    return out;
+  });
+
+export const claimVendorShop = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { vendorId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const vendorId = data.vendorId.trim();
+    if (!vendorId) return { ok: false as const, error: "Pick the shop you run." };
+    const sql = await getSql();
+    await sql`
+      insert into vaani_profiles (user_id, shop_name, phone, role, vendor_id)
+      values (${context.userId}, '', '', 'vendor', ${vendorId})
+      on conflict (user_id) do update set role = 'vendor', vendor_id = excluded.vendor_id
+    `;
+    return { ok: true as const };
+  });
+
+const DEMO_BUYER = "vaani-other-buyer";
+
+export const openVendorInbox = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { vendorId?: string; phone?: string; industry?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const profile = await sql<{
+      shop_name: string;
+      phone: string;
+      industry: string;
+      is_vendor: boolean;
+      vendor_id: string;
+    }>`
+      select shop_name, phone, industry, is_vendor, vendor_id from vaani_profiles
+      where user_id = ${context.userId}
+    `;
+    const row = profile[0];
+    const industry = (data.industry || row?.industry || "") as Industry | "";
+    const inboxId = inboxIdForUser(context.userId);
+    if (!industry) {
+      return {
+        ok: false as const,
+        error: "Save your shop and pick the trade you sell in.",
+        vendorId: "",
+        tickets: [] as Ticket[],
+        industry: "",
+        shopName: row?.shop_name ?? "",
+      };
+    }
+    await sql`
+      insert into vaani_profiles (user_id, shop_name, phone, role, vendor_id, industry, is_vendor)
+      values (${context.userId}, ${row?.shop_name ?? ""}, ${data.phone || row?.phone || ""}, 'vendor', ${inboxId}, ${industry}, true)
+      on conflict (user_id) do update set
+        role = 'vendor',
+        vendor_id = ${inboxId},
+        industry = ${industry},
+        is_vendor = true,
+        shop_name = case when vaani_profiles.shop_name = '' then excluded.shop_name else vaani_profiles.shop_name end,
+        phone = case when vaani_profiles.phone = '' then excluded.phone else vaani_profiles.phone end
+    `;
+    const demos = demoIncomingForIndustry(industry, inboxId);
+    for (const t of demos) {
+      await sql.query(
+        `insert into vaani_tickets (id, user_id, vendor_id, payload)
+         values ($1, $2, $3, $4::jsonb)
+         on conflict (id) do nothing`,
+        [t.id, `${DEMO_BUYER}:${t.id}`, t.vendorId, JSON.stringify(t)],
+      );
+    }
+    const rows = await sql<{ payload: Ticket | string }>`
+      select payload from vaani_tickets
+      where vendor_id = ${inboxId}
+      order by created_at desc
+    `;
+    const tickets = rows
+      .map((r) => parseTicket(r.payload))
+      .filter((t) => {
+        const buyer = phoneDigits(t.customerPhone);
+        const mine = phoneDigits(data.phone || row?.phone || "");
+        return !mine || buyer !== mine;
+      });
+    return {
+      ok: true as const,
+      vendorId: inboxId,
+      tickets,
+      industry,
+      shopName: row?.shop_name ?? "",
+    };
+  });
+
+export const saveTicket = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { ticket: Ticket }) => input)
+  .handler(async ({ context, data }) => {
+    const t = data.ticket;
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const profile = await sql<{ vendor_id: string }>`
+      select vendor_id from vaani_profiles where user_id = ${context.userId}
+    `;
+    const claimed = profile[0]?.vendor_id ?? "";
+    const existing = await sql<{ user_id: string; vendor_id: string }>`
+      select user_id, vendor_id from vaani_tickets where id = ${t.id}
+    `;
+    const payload = JSON.stringify({ ...t, updatedAt: t.updatedAt || new Date().toISOString() });
+    if (existing[0]) {
+      const row = existing[0];
+      const allowed =
+        row.user_id === context.userId ||
+        row.vendor_id === t.vendorId ||
+        (claimed !== "" && row.vendor_id === claimed);
+      if (!allowed) return { ok: false as const, error: "Could not update this list." };
+      await sql.query(`update vaani_tickets set payload = $1::jsonb, vendor_id = $2, customer_phone = $3 where id = $4`, [
+        payload,
+        t.vendorId,
+        digits(t.customerPhone),
+        t.id,
+      ]);
+    } else {
+      await sql.query(
+        `insert into vaani_tickets (id, user_id, vendor_id, payload, customer_phone) values ($1, $2, $3, $4::jsonb, $5)`,
+        [t.id, context.userId, t.vendorId, payload, digits(t.customerPhone)],
+      );
+    }
+    return { ok: true as const };
+  });
+
+export const listIncomingTickets = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { vendorId: string }) => input)
+  .handler(async ({ context, data }) => {
+    if (!data.vendorId) return [];
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const profile = await sql<{ phone: string }>`
+      select phone from vaani_profiles where user_id = ${context.userId}
+    `;
+    const mine = phoneDigits(profile[0]?.phone || "");
+    const rows = await sql<{ payload: Ticket | string }>`
+      select payload from vaani_tickets
+      where vendor_id = ${data.vendorId}
+      order by created_at desc
+    `;
+    return rows
+      .map((r) => parseTicket(r.payload))
+      .filter((t) => !mine || phoneDigits(t.customerPhone) !== mine);
+  });
+
+export const listTickets = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql<{ payload: Ticket | string }>`
+      select payload from vaani_tickets where user_id = ${context.userId} order by created_at desc
+    `;
+    return rows.map((r) => parseTicket(r.payload));
+  });
+
+export const getTicket = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id: string }) => input)
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    const profile = await sql<{ vendor_id: string }>`
+      select vendor_id from vaani_profiles where user_id = ${context.userId}
+    `;
+    const claimed = profile[0]?.vendor_id ?? "";
+    const rows = await sql<{ payload: Ticket | string }>`
+      select payload from vaani_tickets
+      where id = ${data.id}
+        and (user_id = ${context.userId} or (${claimed} <> '' and vendor_id = ${claimed}))
+    `;
+    const raw = rows[0]?.payload;
+    if (!raw) return null;
+    return typeof raw === "string" ? (JSON.parse(raw) as Ticket) : raw;
+  });
