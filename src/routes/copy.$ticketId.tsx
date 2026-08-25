@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getTicket, saveTicket } from "@/lib/vaani/account";
-import { INDUSTRY_LABEL } from "@/lib/vaani/seed";
+import { useT } from "@/lib/vaani/i18n";
 import { readLastTicket, useVaani, vendorById } from "@/lib/vaani/store";
 
 export const Route = createFileRoute("/copy/$ticketId")({ component: CopyPage });
@@ -10,6 +10,7 @@ export const Route = createFileRoute("/copy/$ticketId")({ component: CopyPage })
 function CopyPage() {
   const { ticketId } = Route.useParams();
   const role = useVaani((s) => s.role);
+  const { t, industry: tradeLabel, locale } = useT();
   const liveVendors = useVaani((s) => s.liveVendors);
   const found = useVaani(
     (s) => s.tickets.find((t) => t.id === ticketId) ?? s.incoming.find((t) => t.id === ticketId),
@@ -46,7 +47,7 @@ function CopyPage() {
   if (lookup === "wait" && !ticket) {
     return (
       <>
-        <p className="text-sm text-muted">Loading order copy…</p>
+        <p className="text-sm text-muted">{t("loadingCopy")}</p>
       </>
     );
   }
@@ -54,9 +55,9 @@ function CopyPage() {
   if (!ticket) {
     return (
       <>
-        <p>Order copy not found.</p>
+        <p>{t("copyNotFound")}</p>
         <Link to={role === "vendor" ? "/vendor" : "/"} className="mt-3 inline-block text-sm text-accent">
-          Back
+          {t("back")}
         </Link>
       </>
     );
@@ -71,10 +72,10 @@ function CopyPage() {
     <>
       <div className="no-print mb-4 flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => window.print()}>
-          Print / save PDF
+          {t("printPdf")}
         </Button>
         <Link to="/ticket/$ticketId" params={{ ticketId: ticket.id }} className="inline-flex h-11 items-center text-sm text-muted">
-          Back to list
+          {t("backToList")}
         </Link>
         {role === "vendor" && ticket.status === "finalized" ? (
           <Button
@@ -86,11 +87,11 @@ function CopyPage() {
               void saveTicket({ data: { ticket: next } }).catch(() => undefined);
             }}
           >
-            Delivered
+            {t("delivered")}
           </Button>
         ) : null}
         {ticket.status === "delivered" ? (
-          <span className="inline-flex h-11 items-center text-sm text-ok">Delivered</span>
+          <span className="inline-flex h-11 items-center text-sm text-ok">{t("delivered")}</span>
         ) : null}
       </div>
 
@@ -98,10 +99,10 @@ function CopyPage() {
         <div className="flex items-start justify-between gap-4 border-b border-line pb-5">
           <div>
             <p className="font-display text-3xl tracking-tight">Vaani</p>
-            <p className="text-xs uppercase tracking-[0.16em] text-muted">Order copy</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-muted">{t("orderCopy")}</p>
           </div>
           <p className="text-right text-xs text-muted">
-            {new Date(ticket.createdAt).toLocaleString("en-IN")}
+            {new Date(ticket.createdAt).toLocaleString(locale)}
             <br />
             {ticket.id.slice(0, 8).toUpperCase()}
           </p>
@@ -109,22 +110,22 @@ function CopyPage() {
 
         <div className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted">Vendor</p>
-            <p className="font-medium">{vendor?.shop ?? "Vendor"}</p>
+            <p className="text-xs uppercase tracking-wide text-muted">{t("vendor")}</p>
+            <p className="font-medium">{vendor?.shop ?? t("vendor")}</p>
             <p className="text-muted">{vendor?.name}</p>
             <p className="text-muted">{vendor?.phone}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted">Customer</p>
+            <p className="text-xs uppercase tracking-wide text-muted">{t("customer")}</p>
             <p className="font-medium">{ticket.customerName}</p>
             <p className="text-muted">{ticket.customerPhone}</p>
-            <p className="text-muted">{vendor ? INDUSTRY_LABEL[vendor.industry] : ""}</p>
+            <p className="text-muted">{vendor ? tradeLabel(vendor.industry) : ""}</p>
           </div>
         </div>
 
         {accepted.length > 0 ? (
           <section className="mt-8">
-            <h2 className="font-display text-xl">Accepted</h2>
+            <h2 className="font-display text-xl">{t("accepted")}</h2>
             <table className="mt-2 w-full text-sm">
               <tbody>
                 {accepted.map((l) => (
@@ -145,7 +146,7 @@ function CopyPage() {
 
         {quoted.length > 0 ? (
           <section className="mt-8">
-            <h2 className="font-display text-xl">Quoted rates (awaiting customer)</h2>
+            <h2 className="font-display text-xl">{t("quotedAwaiting")}</h2>
             <table className="mt-2 w-full text-sm">
               <tbody>
                 {quoted.map((l) => (
@@ -164,7 +165,7 @@ function CopyPage() {
 
         {rejected.length > 0 ? (
           <section className="mt-8">
-            <h2 className="font-display text-xl">Rejected</h2>
+            <h2 className="font-display text-xl">{t("rejected")}</h2>
             <ul className="mt-2 space-y-1 text-sm text-muted">
               {rejected.map((l) => (
                 <li key={l.id}>
@@ -181,11 +182,11 @@ function CopyPage() {
             {ticket.orderCopy}
           </pre>
         ) : (
-          <p className="mt-8 text-sm text-muted">Order copy will appear here after the vendor finalizes.</p>
+          <p className="mt-8 text-sm text-muted">{t("copyWillAppear")}</p>
         )}
 
         <p className="mt-8 text-xs text-subtle">
-          Generated by Vaani from a voice list. Not a GST tax invoice. Confirm stock before dispatch.
+          {t("copyDisclaimer")}
         </p>
       </article>
     </>

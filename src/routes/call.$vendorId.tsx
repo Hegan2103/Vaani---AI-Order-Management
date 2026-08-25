@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { saveTicket } from "@/lib/vaani/account";
 import { parseVoiceOrder } from "@/lib/vaani/ai";
 import { fallbackParse } from "@/lib/vaani/match";
-import { INDUSTRY_LABEL, LANGUAGES, formatInPhone, samplesFor } from "@/lib/vaani/seed";
+import { LANGUAGES, formatInPhone, samplesFor } from "@/lib/vaani/seed";
+import { useT } from "@/lib/vaani/i18n";
 import { findOpenTicket, readLoginTen, useVaani, vendorById } from "@/lib/vaani/store";
 import type { LineItem, Ticket } from "@/lib/vaani/types";
 
@@ -22,6 +23,7 @@ function CallScreen() {
   const customerName = useVaani((s) => s.customerName);
   const customerPhone = useVaani((s) => s.customerPhone);
   const language = useVaani((s) => s.language);
+  const { t, industry: tradeLabel } = useT();
   const upsertTicket = useVaani((s) => s.upsertTicket);
 
   const [phase, setPhase] = useState<"idle" | "countdown" | "recording" | "parsing" | "review">("idle");
@@ -107,7 +109,7 @@ function CallScreen() {
         speechRef.current = recg;
       }
     } catch {
-      setError("Microphone blocked. Type the order below instead.");
+      setError(t("micBlocked"));
       setPhase("idle");
     }
   }
@@ -177,10 +179,10 @@ function CallScreen() {
       queueMicrotask(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (err) {
       if (localLines.length) {
-        setWarning(err instanceof Error ? err.message : "Showing spoken list.");
+        setWarning(err instanceof Error ? err.message : t("showingSpoken"));
         return;
       }
-      setError(err instanceof Error ? err.message : "Could not read the list.");
+      setError(err instanceof Error ? err.message : t("couldNotRead"));
       setPhase("idle");
     }
   }
@@ -243,7 +245,7 @@ function CallScreen() {
   if (!found) {
     return (
       <>
-        <p>Vendor not found.</p>
+        <p>{t("vendorNotFound")}</p>
       </>
     );
   }
@@ -254,19 +256,17 @@ function CallScreen() {
 
   return (
     <>
-      <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted">Calling</p>
+      <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted">{t("calling")}</p>
       <h1 className="mt-1 font-display text-4xl tracking-tight">{vendor.shop}</h1>
       <p className="text-sm text-muted">
-        {vendor.name} · {vendor.phone} · {INDUSTRY_LABEL[vendor.industry]}
+        {vendor.name} · {vendor.phone} · {tradeLabel(vendor.industry)}
       </p>
 
       <div className="mx-auto mt-6 max-w-md rounded-[var(--radius-lg)] border border-line bg-surface p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">
-          Example — {INDUSTRY_LABEL[vendor.industry]}
+          {t("examplePrefix", { name: tradeLabel(vendor.industry) })}
         </p>
-        <p className="mt-1 text-xs text-muted">
-          Product + quantity to order. Product + cost/rate to ask a price.
-        </p>
+        <p className="mt-1 text-xs text-muted">{t("exampleOrderHint")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {samplesFor(vendor.industry).map((s) => (
             <button
@@ -288,24 +288,24 @@ function CallScreen() {
       <div className="mx-auto mt-4 max-w-md rounded-[var(--radius-xl)] border border-line bg-surface p-6 text-center">
         <ListenDial mode={dialMode} count={count} />
         <p className="mt-4 font-display text-xl">
-          {phase === "idle" && "Connected — hold the line"}
-          {phase === "countdown" && "Wait — starting in"}
-          {phase === "recording" && "Listening — speak now"}
-          {phase === "parsing" && "Wait — Vaani is reading"}
-          {phase === "review" && "Your list"}
+          {phase === "idle" && t("connected")}
+          {phase === "countdown" && t("waitStarting")}
+          {phase === "recording" && t("listening")}
+          {phase === "parsing" && t("waitReading")}
+          {phase === "review" && t("yourList")}
         </p>
         <p className="mt-2 text-sm text-muted">
-          {phase === "countdown" && "Get ready. Speak after the count."}
-          {phase === "recording" && "Speak the list. Tap stop when done."}
-          {phase === "parsing" && "Please wait while the list is extracted."}
+          {phase === "countdown" && t("readySpeak")}
+          {phase === "recording" && t("speakListStop")}
+          {phase === "parsing" && t("waitExtract")}
           {(phase === "idle" || phase === "review") &&
-            `List language: ${listLang?.label ?? "English"}. Product + quantity to order. Name + cost/rate for a quote.`}
+            t("listLangHint", { name: listLang?.label ?? t("asCustomer") })}
         </p>
 
         {phase === "idle" || phase === "review" ? (
           <Button className="mt-6 w-full" size="lg" onClick={() => void startRec()}>
             <Mic className="size-4" />
-            {phase === "review" ? "Speak again" : "Start speaking"}
+            {phase === "review" ? t("speakAgain") : t("startSpeaking")}
           </Button>
         ) : null}
         {phase === "countdown" ? (
@@ -319,21 +319,21 @@ function CallScreen() {
               setPhase("idle");
             }}
           >
-            Cancel
+            {t("cancel")}
           </Button>
         ) : null}
         {phase === "recording" ? (
           <Button className="mt-6 w-full" variant="danger" size="lg" onClick={() => void stopAndParse()}>
             <Square className="size-4" />
-            Stop and show list
+            {t("stopShowList")}
           </Button>
         ) : null}
-        {phase === "parsing" ? <p className="mt-6 text-sm font-medium text-accent">Please wait…</p> : null}
+        {phase === "parsing" ? <p className="mt-6 text-sm font-medium text-accent">{t("pleaseWait")}</p> : null}
         {live ? <p className="mt-4 text-left text-sm text-muted">{live}</p> : null}
       </div>
 
       <div className="mx-auto mt-6 max-w-md">
-        <label className="text-xs text-muted">Or type the list</label>
+        <label className="text-xs text-muted">{t("orType")}</label>
         <textarea
           value={transcript}
           onChange={(e) => {
@@ -350,7 +350,7 @@ function CallScreen() {
           disabled={phase === "parsing" || phase === "countdown" || phase === "recording"}
           onClick={() => void stopAndParse(transcriptRef.current)}
         >
-          Parse typed list
+          {t("parseTyped")}
         </Button>
         {error ? <p className="mt-2 text-sm text-danger">{error}</p> : null}
         {warning ? <p className="mt-2 text-sm text-warn">{warning}</p> : null}
@@ -358,20 +358,20 @@ function CallScreen() {
 
       {(phase === "review" || lines.length > 0) && (
         <div ref={listRef} className="mx-auto mt-8 max-w-lg space-y-2">
-          <h2 className="font-display text-2xl tracking-tight">Extracted list</h2>
+          <h2 className="font-display text-2xl tracking-tight">{t("extractedList")}</h2>
           {transcript ? (
             <p className="rounded-[var(--radius-md)] bg-accent-soft px-3 py-2 text-sm">
-              You said: <span className="font-medium">{transcript}</span>
+              {t("youSaid")} <span className="font-medium">{transcript}</span>
             </p>
           ) : null}
           {lines.length === 0 ? (
-            <p className="text-sm text-muted">No lines yet. Speak or type a product and quantity.</p>
+            <p className="text-sm text-muted">{t("noLines")}</p>
           ) : (
             lines.map((line, i) => (
               <div key={line.id} className="rounded-[var(--radius-lg)] border border-line bg-surface p-4">
                 <div className="flex items-center justify-between gap-2">
                   <StatusPill status={line.kind} />
-                  <span className="text-xs text-subtle">As spoken</span>
+                  <span className="text-xs text-subtle">{t("asSpoken")}</span>
                 </div>
                 <input
                   className="mt-2 h-11 w-full rounded-[var(--radius-sm)] border border-line bg-bg px-3 text-sm"
@@ -387,7 +387,7 @@ function CallScreen() {
                     type="number"
                     className="h-11 w-24 rounded-[var(--radius-sm)] border border-line bg-bg px-3 text-sm"
                     value={line.quantity ?? ""}
-                    placeholder="Qty"
+                    placeholder={t("qty")}
                     onChange={(e) => {
                       const next = lines.slice();
                       next[i] = { ...line, quantity: e.target.value === "" ? null : Number(e.target.value) };
@@ -404,7 +404,7 @@ function CallScreen() {
                     }}
                   />
                   {line.kind === "inquiry" ? (
-                    <span className="self-center text-xs text-muted">qty for quote</span>
+                    <span className="self-center text-xs text-muted">{t("qtyForQuote")}</span>
                   ) : null}
                 </div>
                 <p className="mt-1 text-xs text-subtle">{line.raw}</p>
@@ -412,7 +412,7 @@ function CallScreen() {
             ))
           )}
           <Button className="w-full" size="lg" onClick={() => void send()} disabled={!lines.length}>
-            Send list to {vendor.shop}
+            {t("sendListTo", { shop: vendor.shop })}
           </Button>
         </div>
       )}

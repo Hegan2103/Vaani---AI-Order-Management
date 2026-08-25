@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { authMiddleware } from "@/lib/auth/middleware";
+import { vaaniGate } from "./gate";
 import { getSql, type Sql } from "@/lib/db";
-import { demoIncomingForIndustry, inboxIdForUser, phoneDigits } from "./seed";
+import { inboxIdForUser, phoneDigits } from "./seed";
 import type { Industry, Role, Ticket, Vendor } from "./types";
 
 function digits(phone: string) {
@@ -103,7 +103,7 @@ export const signInWithMobile = createServerFn({ method: "POST" })
   });
 
 export const loadProfile = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .handler(async ({ context }) => {
     const sql = await getSql();
     await ensureVaaniSchema(sql);
@@ -133,7 +133,7 @@ function parseTicket(payload: Ticket | string): Ticket {
 }
 
 export const loadAccount = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: { phone?: string } = {}) => input ?? {})
   .handler(async ({ context, data }) => {
     const sql = await getSql();
@@ -280,7 +280,7 @@ export const loadAccount = createServerFn({ method: "POST" })
   });
 
 export const saveProfile = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator(
     (input: {
       shopName: string;
@@ -295,6 +295,7 @@ export const saveProfile = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const shopName = data.shopName.trim();
     if (!shopName) return { ok: false as const, error: "Shop name cannot be empty." };
+    if (!context.userId) return { ok: true as const, vendorId: "" };
     const sql = await getSql();
     await ensureVaaniSchema(sql);
     const existing = await sql<{ phone: string }>`
@@ -327,7 +328,7 @@ export const saveProfile = createServerFn({ method: "POST" })
   });
 
 export const saveLanguage = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: { language: string }) => input)
   .handler(async ({ context, data }) => {
     const language = data.language.trim() || "hi-IN";
@@ -343,7 +344,7 @@ export const saveLanguage = createServerFn({ method: "POST" })
   });
 
 export const rememberLoginPhone = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: { phone: string }) => input)
   .handler(async ({ context, data }) => {
     const ten = phoneDigits(data.phone);
@@ -392,7 +393,7 @@ export const rememberLoginPhone = createServerFn({ method: "POST" })
   });
 
 export const listRegisteredVendors = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .handler(async () => {
     const sql = await getSql();
     await ensureVaaniSchema(sql);
@@ -420,19 +421,12 @@ export const listRegisteredVendors = createServerFn({ method: "GET" })
     const out: Vendor[] = [];
     for (const r of rows) {
       const emailTen = (r.email ?? "").match(/^91(\d{10})@/i)?.[1] ?? "";
-      const ten = phoneDigits(r.phone) || emailTen;
+      const idTen = (r.user_id ?? "").match(/(\d{10})$/)?.[1] ?? "";
+      const ten = phoneDigits(r.phone) || emailTen || idTen;
       if (ten.length !== 10) continue;
-      const listed =
-        r.is_vendor === true ||
-        r.is_vendor === "t" ||
-        r.is_vendor === "true" ||
-        r.is_vendor === 1 ||
-        Boolean(r.shop_name?.trim()) ||
-        Boolean(r.vendor_id);
-      if (!listed && !emailTen) continue;
       const industry = trades.includes(r.industry as Industry) ? (r.industry as Industry) : "grocery";
-      const id = r.vendor_id || inboxIdForUser(r.user_id);
-      const display = r.shop_name.trim() || `Shop ${ten}`;
+      const id = r.vendor_id || inboxIdForUser(r.user_id || `vaani-${ten}`);
+      const display = (r.shop_name || "").trim() || `Shop ${ten}`;
       out.push({
         id,
         name: display,
@@ -467,7 +461,7 @@ export const listRegisteredVendors = createServerFn({ method: "GET" })
   });
 
 export const claimVendorShop = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: { vendorId: string }) => input)
   .handler(async ({ context, data }) => {
     const vendorId = data.vendorId.trim();
@@ -481,10 +475,8 @@ export const claimVendorShop = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-const DEMO_BUYER = "vaani-other-buyer";
-
 export const openVendorInbox = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: { vendorId?: string; phone?: string; industry?: string }) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
@@ -523,15 +515,6 @@ export const openVendorInbox = createServerFn({ method: "POST" })
         shop_name = case when vaani_profiles.shop_name = '' then excluded.shop_name else vaani_profiles.shop_name end,
         phone = case when vaani_profiles.phone = '' then excluded.phone else vaani_profiles.phone end
     `;
-    const demos = demoIncomingForIndustry(industry, inboxId);
-    for (const t of demos) {
-      await sql.query(
-        `insert into vaani_tickets (id, user_id, vendor_id, payload)
-         values ($1, $2, $3, $4::jsonb)
-         on conflict (id) do nothing`,
-        [t.id, `${DEMO_BUYER}:${t.id}`, t.vendorId, JSON.stringify(t)],
-      );
-    }
     const rows = await sql<{ payload: Ticket | string }>`
       select payload from vaani_tickets
       where vendor_id = ${inboxId}
@@ -554,7 +537,7 @@ export const openVendorInbox = createServerFn({ method: "POST" })
   });
 
 export const saveTicket = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: { ticket: Ticket }) => input)
   .handler(async ({ context, data }) => {
     const t = data.ticket;
@@ -591,7 +574,7 @@ export const saveTicket = createServerFn({ method: "POST" })
   });
 
 export const listIncomingTickets = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: { vendorId: string }) => input)
   .handler(async ({ context, data }) => {
     if (!data.vendorId) return [];
@@ -612,7 +595,7 @@ export const listIncomingTickets = createServerFn({ method: "POST" })
   });
 
 export const listTickets = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .handler(async ({ context }) => {
     const sql = await getSql();
     await ensureVaaniSchema(sql);
@@ -623,7 +606,7 @@ export const listTickets = createServerFn({ method: "GET" })
   });
 
 export const getTicket = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: { id: string }) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();

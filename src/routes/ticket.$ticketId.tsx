@@ -5,7 +5,7 @@ import { StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { getTicket, saveTicket } from "@/lib/vaani/account";
 import { composeOrderCopy } from "@/lib/vaani/ai";
-import { INDUSTRY_LABEL } from "@/lib/vaani/seed";
+import { useT } from "@/lib/vaani/i18n";
 import { mergeOneTicket, useVaani, vendorById } from "@/lib/vaani/store";
 import type { LineItem, Ticket } from "@/lib/vaani/types";
 
@@ -16,6 +16,7 @@ function TicketPage() {
   const navigate = useNavigate();
   const role = useVaani((s) => s.role);
   const language = useVaani((s) => s.language);
+  const { t, industry: tradeLabel } = useT();
   const liveVendors = useVaani((s) => s.liveVendors);
   const found = useVaani(
     (s) => s.tickets.find((t) => t.id === ticketId) ?? s.incoming.find((t) => t.id === ticketId),
@@ -70,7 +71,7 @@ function TicketPage() {
   if (lookup === "wait" && !found) {
     return (
       <>
-        <p className="text-sm text-muted">Loading list…</p>
+        <p className="text-sm text-muted">{t("loadingList")}</p>
       </>
     );
   }
@@ -78,14 +79,14 @@ function TicketPage() {
     return (
       <>
         <BackLink role={role} />
-        <p className="mt-4">Request not found.</p>
+        <p className="mt-4">{t("requestNotFound")}</p>
       </>
     );
   }
   if (!found) {
     return (
       <>
-        <p className="text-sm text-muted">Loading list…</p>
+        <p className="text-sm text-muted">{t("loadingList")}</p>
       </>
     );
   }
@@ -121,7 +122,7 @@ function TicketPage() {
     updateLines(ticket.id, lines, status);
     const res = await persist({ ...ticket, lines, status });
     setActing(null);
-    if (res && "ok" in res && res.ok === false) setErr("Could not save. Try again.");
+    if (res && "ok" in res && res.ok === false) setErr(t("couldNotSave"));
   }
 
   async function finalize() {
@@ -139,7 +140,7 @@ function TicketPage() {
     });
     setBusy(false);
     if (!res.ok) {
-      setErr("Could not compose the copy");
+      setErr(t("couldNotCompose"));
       return;
     }
     setOrderCopy(ticket.id, res.text);
@@ -155,23 +156,23 @@ function TicketPage() {
 
   function qtyLabel(line: LineItem) {
     const qty = line.quantity != null ? `${line.quantity} ${line.unit}` : line.unit;
-    return line.kind === "order" ? `Qty ${qty}` : `Quote for ${qty}`;
+    return line.kind === "order" ? t("qtyLabel", { qty }) : t("quoteFor", { qty });
   }
 
   return (
     <>
       <BackLink role={role} />
       <p className="mt-3 text-xs font-medium uppercase tracking-[0.16em] text-muted">
-        {role === "vendor" ? "Incoming list" : "Sent list"}
+        {role === "vendor" ? t("incomingList") : t("sentList")}
       </p>
       <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl tracking-tight md:text-4xl">
-            {role === "vendor" ? ticket.customerName || "Customer" : vendor?.shop ?? "Vendor"}
+            {role === "vendor" ? ticket.customerName || t("customer") : vendor?.shop ?? t("vendor")}
           </h1>
           <p className="text-sm text-muted">
             {ticket.customerPhone}
-            {vendor ? ` · ${INDUSTRY_LABEL[vendor.industry]}` : ""}
+            {vendor ? ` · ${tradeLabel(vendor.industry)}` : ""}
           </p>
         </div>
         <StatusPill status={ticket.status} />
@@ -196,7 +197,7 @@ function TicketPage() {
               <p className="mt-2 font-medium">{line.productName}</p>
               <p className="text-sm text-muted">{qtyLabel(line)}</p>
               {line.quotedPrice != null ? (
-                <p className="mt-1 text-sm">Quoted ₹{line.quotedPrice} / {line.unit}</p>
+                <p className="mt-1 text-sm">{t("quotedAt", { price: line.quotedPrice, unit: line.unit })}</p>
               ) : null}
               {line.rejectReason ? <p className="text-sm text-danger">{line.rejectReason}</p> : null}
 
@@ -213,15 +214,15 @@ function TicketPage() {
               {role === "customer" && line.status === "quoted" && line.quotedPrice != null && !locked ? (
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
                   <Button size="sm" disabled={acting === line.id} onClick={() => void patch(i, { status: "confirmed" })}>
-                    Accept price
+                    {t("acceptPrice")}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     disabled={acting === line.id}
-                    onClick={() => void patch(i, { status: "rejected", rejectReason: "Price not accepted" })}
+                    onClick={() => void patch(i, { status: "rejected", rejectReason: t("priceNotAccepted") })}
                   >
-                    Reject price
+                    {t("rejectPrice")}
                   </Button>
                 </div>
               ) : null}
@@ -231,20 +232,20 @@ function TicketPage() {
       </ul>
 
       {role === "vendor" && pending && !locked ? (
-        <p className="mt-4 text-sm text-muted">Accept or reject every line. Quote a rate for inquiries.</p>
+        <p className="mt-4 text-sm text-muted">{t("acceptOrReject")}</p>
       ) : null}
       {role === "vendor" && !pending && waitingOnPrice && !locked ? (
         <p className="mt-4 text-sm text-muted">
-          Customer can accept or reject quoted rates. You can still generate the order copy.
+          {t("waitingQuoteVendor")}
         </p>
       ) : null}
       {role === "customer" && waitingOnPrice && !locked ? (
-        <p className="mt-4 text-sm text-muted">Accept or reject each quoted rate. The vendor will generate the copy.</p>
+        <p className="mt-4 text-sm text-muted">{t("waitingQuoteCustomer")}</p>
       ) : null}
 
       {role === "vendor" && !locked ? (
         <Button className="mt-6 w-full sm:w-auto" size="lg" disabled={!vendorReady || busy} onClick={() => void finalize()}>
-          {busy ? "Writing order copy…" : "Finalize and generate copy"}
+          {busy ? t("writingCopy") : t("finalizeCopy")}
         </Button>
       ) : null}
 
@@ -255,29 +256,30 @@ function TicketPage() {
             params={{ ticketId: ticket.id }}
             className="inline-flex h-12 items-center rounded-[var(--radius-md)] bg-accent px-5 text-sm font-medium text-accent-fg"
           >
-            Open order copy
+            {t("openCopy")}
           </Link>
           {role === "vendor" && ticket.status !== "delivered" ? (
             <Button size="lg" variant="outline" disabled={busy} onClick={() => void markDelivered()}>
-              {busy ? "Saving…" : "Delivered"}
+              {busy ? t("saving") : t("delivered")}
             </Button>
           ) : null}
         </div>
       ) : null}
-      {ticket.status === "delivered" ? <p className="mt-3 text-sm text-ok">Marked delivered.</p> : null}
+      {ticket.status === "delivered" ? <p className="mt-3 text-sm text-ok">{t("markedDelivered")}</p> : null}
       {err ? <p className="mt-3 text-sm text-danger">{err}</p> : null}
     </>
   );
 }
 
 function BackLink({ role }: { role: string }) {
+  const { t } = useT();
   return (
     <Link
       to={role === "vendor" ? "/vendor" : "/"}
       className="inline-flex items-center gap-1 text-sm text-muted"
     >
       <ArrowLeft className="size-4" />
-      Back
+      {t("back")}
     </Link>
   );
 }
@@ -296,35 +298,36 @@ function VendorActions({
   onQuote: (price: number) => void;
 }) {
   const [price, setPrice] = useState("");
+  const { t } = useT();
   return (
     <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
       {line.kind === "order" ? (
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={busy} onClick={onAccept}>
-            {busy ? "Saving…" : "Accept"}
+            {busy ? t("saving") : t("accept")}
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={onReject}>
-            Reject
+            {t("reject")}
           </Button>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           <span className="self-center text-sm text-muted">
-            ₹ for {line.quantity != null ? `${line.quantity} ${line.unit}` : line.unit}
+            {t("rupeeFor", { qty: line.quantity != null ? `${line.quantity} ${line.unit}` : line.unit })}
           </span>
           <input
             type="number"
             inputMode="decimal"
-            placeholder="Rate"
+            placeholder={t("rate")}
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             className="h-9 w-28 rounded-[var(--radius-sm)] border border-line bg-bg px-2 text-sm"
           />
           <Button size="sm" disabled={busy || !price} onClick={() => onQuote(Number(price))}>
-            Quote rate
+            {t("quoteRate")}
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={onReject}>
-            Reject
+            {t("reject")}
           </Button>
         </div>
       )}

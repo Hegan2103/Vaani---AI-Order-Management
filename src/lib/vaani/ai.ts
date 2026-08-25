@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { authMiddleware } from "@/lib/auth/middleware";
+import { vaaniGate } from "./gate";
 import { alignToSpoken, fallbackParse } from "./match";
 import { LANGUAGES } from "./seed";
 import type { LineItem } from "./types";
@@ -125,7 +125,7 @@ JSON:
 }
 
 export const parseVoiceOrder = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator((input: ParseInput) => input)
   .handler(async ({ data }) => {
     const apiKey = process.env.XAI_API_KEY;
@@ -197,7 +197,7 @@ export const parseVoiceOrder = createServerFn({ method: "POST" })
   });
 
 export const composeOrderCopy = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([vaaniGate])
   .validator(
     (input: {
       shop: string;

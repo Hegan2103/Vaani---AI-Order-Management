@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { DEFAULT_CONTACTS, formatInPhone, phoneDigits, phonesMatch, VENDORS } from "./seed";
+import { DEFAULT_CONTACTS, formatInPhone, inboxIdForUser, phoneDigits, phonesMatch, VENDORS } from "./seed";
 import type { Contact, Industry, LineItem, Role, Ticket, TicketStatus, VaaniNotice, Vendor } from "./types";
 
 const LAST_TICKET_KEY = "vaani-last-ticket";
@@ -8,6 +8,36 @@ const SHOP_KEY = "vaani-shop-identity-v1";
 const BACKUP_KEY = "vaani-account-backup-v1";
 const LOGIN_PHONE_KEY = "vaani-login-phone";
 const LISTED_KEY = "vaani-listed-vendors-v1";
+const CACHE_EPOCH = "vaani-wipe-2026-08-25e";
+
+/** One-time wipe of leftover shop/login/order cache after a data reset. */
+export function purgeStaleClientCache() {
+  if (typeof window === "undefined") return false;
+  try {
+    if (localStorage.getItem("vaani-cache-epoch") === CACHE_EPOCH) return false;
+    const drop: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || key === "vaani-cache-epoch") continue;
+      if (key.startsWith("vaani-") || key.startsWith("grok-auth")) drop.push(key);
+    }
+    for (const key of drop) localStorage.removeItem(key);
+    const sessionDrop: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const key = sessionStorage.key(i);
+      if (key && (key.startsWith("vaani-") || key.startsWith("grok-auth"))) sessionDrop.push(key);
+    }
+    for (const key of sessionDrop) sessionStorage.removeItem(key);
+    document.cookie = "vaani-entered=; path=/; max-age=0";
+    document.cookie = "vaani_phone=; path=/; max-age=0";
+    localStorage.setItem("vaani-cache-epoch", CACHE_EPOCH);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+if (typeof window !== "undefined") purgeStaleClientCache();
 
 export type ShopIdentity = {
   shopName: string;
@@ -168,14 +198,14 @@ function vendorFromListing(ten: string, shop: string, industry: Industry | "", n
   const formatted = formatInPhone(ten);
   const title = shop.trim() || name?.trim() || `Shop ${ten}`;
   return {
-    id: `v-local-${ten}`,
+    id: inboxIdForUser(`vaani-${ten}`),
     name: title,
     shop: title,
     phone: formatted,
     city: "",
     industry: industry || "grocery",
     catalog: [],
-    altPhones: [ten, `+91${ten}`, `91${ten}`, formatted],
+    altPhones: [ten, `+91${ten}`, `91${ten}`, `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`, formatted],
   };
 }
 
@@ -566,7 +596,7 @@ export const useVaani = create<State>()(
           language: p.language || current.language || "hi-IN",
           shopSaved: Boolean(p.shopSaved || current.shopSaved || name),
           accountUserId: p.accountUserId || current.accountUserId || "",
-          accountReady: false,
+          accountReady: Boolean(name || p.tickets?.length || p.incoming?.length || current.shopSaved),
           tickets: mergeTicketLists(p.tickets ?? [], current.tickets),
           incoming: mergeTicketLists(p.incoming ?? [], current.incoming),
           claimedVendorId: p.claimedVendorId || current.claimedVendorId || "",
@@ -752,19 +782,4 @@ export function clearLocalVaani() {
     language: "hi-IN",
     role: "customer",
   });
-}
-
-const CACHE_EPOCH = "vaani-cache-2026-08-25d";
-
-/** Wipe leftover shop/login data once after a cache-bust release. */
-export function purgeStaleClientCache() {
-  if (typeof window === "undefined") return false;
-  try {
-    if (localStorage.getItem("vaani-cache-epoch") === CACHE_EPOCH) return false;
-    clearLocalVaani();
-    localStorage.setItem("vaani-cache-epoch", CACHE_EPOCH);
-    return true;
-  } catch {
-    return false;
-  }
 }

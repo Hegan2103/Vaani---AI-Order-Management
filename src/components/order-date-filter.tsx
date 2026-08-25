@@ -1,4 +1,5 @@
 import type { Ticket } from "@/lib/vaani/types";
+import { useT, type UiKey } from "@/lib/vaani/i18n";
 
 export type DatePreset = "all" | "today" | "yesterday" | "week" | "month" | "custom";
 
@@ -10,13 +11,13 @@ export type DateFilter = {
 
 export const DEFAULT_DATE_FILTER: DateFilter = { preset: "all", from: "", to: "" };
 
-const PRESETS: { id: DatePreset; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "today", label: "Today" },
-  { id: "yesterday", label: "Yesterday" },
-  { id: "week", label: "This week" },
-  { id: "month", label: "This month" },
-  { id: "custom", label: "Custom" },
+const PRESETS: { id: DatePreset; key: UiKey }[] = [
+  { id: "all", key: "all" },
+  { id: "today", key: "today" },
+  { id: "yesterday", key: "yesterday" },
+  { id: "week", key: "thisWeek" },
+  { id: "month", key: "thisMonth" },
+  { id: "custom", key: "custom" },
 ];
 
 export function dayKey(iso: string) {
@@ -75,7 +76,7 @@ export function filterByDate(tickets: Ticket[], filter: DateFilter) {
   });
 }
 
-export function groupByDate(tickets: Ticket[]) {
+export function groupByDate(tickets: Ticket[], todayLabel = "Today", yesterdayLabel = "Yesterday", locale = "en-IN") {
   const today = dayKey(new Date().toISOString());
   const yesterday = dayKey(shiftDay(new Date(), -1).toISOString());
   const groups = new Map<string, Ticket[]>();
@@ -91,10 +92,10 @@ export function groupByDate(tickets: Ticket[]) {
       key,
       label:
         key === today
-          ? "Today"
+          ? todayLabel
           : key === yesterday
-            ? "Yesterday"
-            : new Date(`${key}T12:00:00`).toLocaleDateString("en-IN", {
+            ? yesterdayLabel
+            : new Date(`${key}T12:00:00`).toLocaleDateString(locale, {
                 day: "numeric",
                 month: "short",
                 year: "numeric",
@@ -110,6 +111,7 @@ export function OrderDateFilter({
   value: DateFilter;
   onChange: (next: DateFilter) => void;
 }) {
+  const { t } = useT();
   return (
     <div className="mb-3 space-y-2">
       <div className="flex flex-wrap gap-1.5">
@@ -124,20 +126,20 @@ export function OrderDateFilter({
                 : "border-line bg-surface text-muted"
             }`}
           >
-            {p.label}
+            {t(p.key)}
           </button>
         ))}
       </div>
       {value.preset === "custom" ? (
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-muted">From</label>
+          <label className="text-xs text-muted">{t("from")}</label>
           <input
             type="date"
             value={value.from}
             onChange={(e) => onChange({ ...value, from: e.target.value, preset: "custom" })}
             className="h-9 rounded-[var(--radius-sm)] border border-line bg-surface px-2 text-sm"
           />
-          <label className="text-xs text-muted">To</label>
+          <label className="text-xs text-muted">{t("to")}</label>
           <input
             type="date"
             value={value.to}

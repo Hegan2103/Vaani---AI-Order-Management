@@ -1,13 +1,12 @@
 import { Pencil } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { saveProfile } from "@/lib/vaani/account";
 import { INDUSTRY_LABEL, LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
+import { useT } from "@/lib/vaani/i18n";
 import { readShopIdentity, useVaani } from "@/lib/vaani/store";
 import type { Industry } from "@/lib/vaani/types";
 
 export function ShopCard({ extra }: { extra?: ReactNode }) {
-  const role = useVaani((s) => s.role);
   const customerName = useVaani((s) => s.customerName);
   const customerPhone = useVaani((s) => s.customerPhone);
   const industry = useVaani((s) => s.industry);
@@ -15,6 +14,8 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const language = useVaani((s) => s.language);
   const shopSaved = useVaani((s) => s.shopSaved);
   const setShopIdentity = useVaani((s) => s.setShopIdentity);
+  const setLanguage = useVaani((s) => s.setLanguage);
+  const { t, industry: tradeLabel } = useT();
 
   const snap = readShopIdentity(customerPhone);
   const savedName = snap?.shopName || customerName;
@@ -32,7 +33,6 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const [sellDraft, setSellDraft] = useState(savedVendor);
   const [langDraft, setLangDraft] = useState(savedLang);
   const [shopMsg, setShopMsg] = useState<string | null>(null);
-  const [shopBusy, setShopBusy] = useState(false);
   const editClicked = useRef(false);
 
   useEffect(() => {
@@ -59,11 +59,11 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     e.preventDefault();
     const shopName = shopDraft.trim();
     if (!shopName) {
-      setShopMsg("Enter your shop name.");
+      setShopMsg(t("enterShopName"));
       return;
     }
     if (sellDraft && !industryDraft) {
-      setShopMsg("Pick the trade you sell in.");
+      setShopMsg(t("pickTrade"));
       return;
     }
     const identity = {
@@ -76,31 +76,13 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     setShopIdentity(identity);
     editClicked.current = false;
     setEditing(false);
-    setShopBusy(true);
-    setShopMsg("Shop details saved.");
-    try {
-      const res = await saveProfile({
-        data: {
-          shopName,
-          phone: identity.phone,
-          role: sellDraft ? "vendor" : role === "vendor" ? "vendor" : "customer",
-          industry: industryDraft,
-          isVendor: sellDraft,
-          language: langDraft,
-        },
-      });
-      if (res.ok) setShopMsg("Shop details saved.");
-    } catch {
-      /* kept on this phone */
-    } finally {
-      setShopBusy(false);
-    }
+    setShopMsg(t("shopSaved"));
   }
 
   return (
     <div className="rounded-[var(--radius-xl)] border border-line bg-surface p-5">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">Your shop</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("yourShop")}</p>
         {locked ? (
           <Button
             type="button"
@@ -118,7 +100,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             }}
           >
             <Pencil className="size-3.5" />
-            Edit
+            {t("edit")}
           </Button>
         ) : null}
       </div>
@@ -126,21 +108,21 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
       {locked ? (
         <div className="mt-3">
           <p className="font-medium">{savedName}</p>
-          <p className="text-sm text-muted">{savedPhone || "No phone saved"}</p>
+          <p className="text-sm text-muted">{savedPhone || t("noPhone")}</p>
           <p className="mt-1 text-sm text-muted">
-            {savedIndustry ? INDUSTRY_LABEL[savedIndustry] : "Trade not set"}
-            {savedVendor ? " · Listed as vendor" : " · Customer"}
+            {savedIndustry ? tradeLabel(savedIndustry) : t("tradeNotSet")}
+            {savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`}
             {` · ${LANGUAGES.find((l) => l.id === savedLang)?.label ?? savedLang}`}
           </p>
           {shopMsg ? (
-            <p className={`mt-2 text-sm ${shopMsg.toLowerCase().includes("saved") ? "text-ok" : "text-danger"}`}>
+            <p className={`mt-2 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>
               {shopMsg}
             </p>
           ) : null}
         </div>
       ) : (
         <form className="mt-3" onSubmit={(e) => void onSubmit(e)}>
-          <label className="block text-xs text-muted">Shop name</label>
+          <label className="block text-xs text-muted">{t("shopName")}</label>
           <input
             required
             value={shopDraft}
@@ -150,7 +132,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             }}
             className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
           />
-          <label className="mt-3 block text-xs text-muted">Logged in mobile</label>
+          <label className="mt-3 block text-xs text-muted">{t("loggedMobile")}</label>
           <input
             readOnly
             value={loginTen.length === 10 ? formatInPhone(loginTen) : phoneDraft}
@@ -160,23 +142,26 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             }}
             className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm text-muted"
           />
-          <label className="mt-3 block text-xs text-muted">Your trade</label>
+          <label className="mt-3 block text-xs text-muted">{t("yourTrade")}</label>
           <select
             value={industryDraft}
             onChange={(e) => setIndustryDraft(e.target.value as Industry | "")}
             className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
           >
-            <option value="">Select industry</option>
-            {Object.entries(INDUSTRY_LABEL).map(([k, v]) => (
+            <option value="">{t("selectIndustry")}</option>
+            {Object.keys(INDUSTRY_LABEL).map((k) => (
               <option key={k} value={k}>
-                {v}
+                {tradeLabel(k as Industry)}
               </option>
             ))}
           </select>
-          <label className="mt-3 block text-xs text-muted">Language</label>
+          <label className="mt-3 block text-xs text-muted">{t("language")}</label>
           <select
             value={langDraft}
-            onChange={(e) => setLangDraft(e.target.value)}
+            onChange={(e) => {
+              setLangDraft(e.target.value);
+              setLanguage(e.target.value);
+            }}
             className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
           >
             {LANGUAGES.map((l) => (
@@ -192,14 +177,11 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
               checked={sellDraft}
               onChange={(e) => setSellDraft(e.target.checked)}
             />
-            <span>
-              I sell on Vaani — list me as a vendor in this trade. Buyers who have this
-              number send orders here.
-            </span>
+            <span>{t("sellOnVaani")}</span>
           </label>
           <div className="mt-4 flex gap-2">
-            <Button type="submit" className="flex-1" disabled={shopBusy}>
-              {shopBusy ? "Saving…" : "Save shop details"}
+            <Button type="submit" className="flex-1">
+              {t("saveShop")}
             </Button>
             {hasSaved ? (
               <Button
@@ -216,12 +198,12 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
                   setShopMsg(null);
                 }}
               >
-                Cancel
+                {t("cancel")}
               </Button>
             ) : null}
           </div>
           {shopMsg ? (
-            <p className={`mt-2 text-sm ${shopMsg.includes("saved") ? "text-ok" : "text-danger"}`}>
+            <p className={`mt-2 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>
               {shopMsg}
             </p>
           ) : null}

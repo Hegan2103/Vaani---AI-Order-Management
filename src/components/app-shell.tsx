@@ -1,13 +1,15 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Bell, Phone, Store } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CustomerHome } from "@/components/customer-home";
 import { resetLoginGate } from "@/components/login-screen";
+import { VendorHome } from "@/components/vendor-home";
 import { Button } from "@/components/ui/button";
-import { getBearerToken, storeBearerToken } from "@/lib/auth/client";
+import { storeBearerToken } from "@/lib/auth/client";
 import { cn } from "@/lib/cn";
-import { listIncomingTickets, listRegisteredVendors, listTickets, loadAccount, saveLanguage, saveProfile, saveTicket } from "@/lib/vaani/account";
-import { diffTicketEvents, playBeep, ticketFingerprint, unlockBeep } from "@/lib/vaani/notify";
-import { LANGUAGES, formatInPhone, inboxIdForUser, phoneDigits } from "@/lib/vaani/seed";
+import { unlockBeep } from "@/lib/vaani/notify";
+import { LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
+import { isRtl, useT } from "@/lib/vaani/i18n";
 import {
   mergeTicketLists,
   readAccountBackup,
@@ -28,6 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const setShopIdentity = useVaani((s) => s.setShopIdentity);
   const setLanguage = useVaani((s) => s.setLanguage);
   const language = useVaani((s) => s.language);
+  const { t } = useT();
   const customerPhone = useVaani((s) => s.customerPhone);
   const customerName = useVaani((s) => s.customerName);
   const setClaimedVendor = useVaani((s) => s.setClaimedVendor);
@@ -41,6 +44,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hydrated = useVaani((s) => s.hydrated);
   const accountReady = useVaani((s) => s.accountReady);
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onDesk = pathname === "/" || pathname === "/vendor";
+  const customerOn = onDesk ? pathname !== "/vendor" : role === "customer";
+  const vendorOn = onDesk ? pathname === "/vendor" : role === "vendor";
   const loginTen = readLoginTen();
   const userId = loginTen ? `vaani-${loginTen}` : "";
   const userEmail = loginTen ? `91${loginTen}@phone.vaani.app` : "";
@@ -137,13 +144,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     setAccountReady(true);
   }, [isPending, userId, userEmail, hydrated]);
 
+  useEffect(() => {
+    if (pathname === "/vendor") setRole("vendor");
+    else if (pathname === "/") setRole("customer");
+  }, [pathname, setRole]);
+
+  useEffect(() => {
+    const lang = language || "hi-IN";
+    document.documentElement.lang = lang;
+    document.documentElement.dir = isRtl(lang) ? "rtl" : "ltr";
+  }, [language]);
+
   return (
     <div className="min-h-dvh bg-bg text-ink">
       <header className="no-print sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur-sm">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="flex items-baseline gap-2">
             <span className="font-display text-xl tracking-tight">Vaani</span>
-            <span className="hidden text-xs text-muted sm:inline">Voice orders</span>
+            <span className="hidden text-xs text-muted sm:inline">{t("voiceOrders")}</span>
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 rounded-[var(--radius-lg)] border border-line bg-surface p-1">
@@ -152,31 +170,30 @@ export function AppShell({ children }: { children: ReactNode }) {
                 onClick={() => setRole("customer")}
                 className={cn(
                   "inline-flex h-8 items-center gap-1 rounded-full px-3 text-sm font-medium",
-                  role === "customer" ? "bg-accent text-accent-fg" : "text-muted",
+                  customerOn ? "bg-accent text-accent-fg" : "text-muted",
                 )}
               >
                 <Phone className="size-3.5" />
-                Customer
+                {t("customer")}
               </Link>
               <Link
                 to="/vendor"
                 onClick={() => setRole("vendor")}
                 className={cn(
                   "inline-flex h-8 items-center gap-1 rounded-full px-3 text-sm font-medium",
-                  role === "vendor" ? "bg-accent text-accent-fg" : "text-muted",
+                  vendorOn ? "bg-accent text-accent-fg" : "text-muted",
                 )}
               >
                 <Store className="size-3.5" />
-                Vendor
+                {t("vendor")}
               </Link>
             </div>
             <select
-              aria-label="Language"
+              aria-label={t("language")}
               value={language || "hi-IN"}
               onChange={(e) => {
                 const next = e.target.value;
                 setLanguage(next);
-                void saveLanguage({ data: { language: next } }).catch(() => undefined);
               }}
               className="h-9 max-w-[9.5rem] rounded-[var(--radius-sm)] border border-line bg-surface px-2 text-xs"
             >
@@ -195,7 +212,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl px-4 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-5xl px-4 py-6">
+        <div hidden={!onDesk || pathname === "/vendor"}>
+          <CustomerHome />
+        </div>
+        <div hidden={pathname !== "/vendor"}>
+          <VendorHome />
+        </div>
+        {!onDesk ? children : null}
+      </main>
     </div>
   );
 }
@@ -204,6 +229,7 @@ function NoticeBell() {
   const notices = useVaani((s) => s.notices);
   const markNoticesRead = useVaani((s) => s.markNoticesRead);
   const role = useVaani((s) => s.role);
+  const { t } = useT();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const visible = notices.filter((n) => !("audience" in n) || n.audience === role);
@@ -216,7 +242,7 @@ function NoticeBell() {
         size="icon"
         variant="outline"
         className="relative size-9"
-        aria-label="Notifications"
+        aria-label={t("notifications")}
         onClick={() => {
           unlockBeep();
           setOpen((v) => !v);
@@ -233,10 +259,10 @@ function NoticeBell() {
       {open ? (
         <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg">
           <p className="border-b border-line px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted">
-            Notifications
+            {t("notifications")}
           </p>
           {visible.length === 0 ? (
-            <p className="px-3 py-6 text-sm text-muted">No events yet.</p>
+            <p className="px-3 py-6 text-sm text-muted">{t("noEvents")}</p>
           ) : (
             <ul className="max-h-80 overflow-auto">
               {visible.map((n) => (
@@ -258,7 +284,7 @@ function NoticeBell() {
                     <p className="text-sm font-medium">{n.title}</p>
                     <p className="text-xs text-muted">{n.body}</p>
                     <p className="text-[10px] text-subtle">
-                      {new Date(n.at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(n.at).toLocaleTimeString(useVaani.getState().language || "en-IN", { hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </button>
                 </li>
@@ -272,9 +298,10 @@ function NoticeBell() {
 }
 
 function SignedInPhone({ phone, shop }: { phone: string; shop: string }) {
+  const { t } = useT();
   const ten = phoneDigits(phone);
   if (ten.length !== 10) {
-    return <span className="max-w-[9rem] truncate text-xs text-muted">{shop || "Signed in"}</span>;
+    return <span className="max-w-[9rem] truncate text-xs text-muted">{shop || t("signedIn")}</span>;
   }
   return (
     <span className="inline-flex max-w-[14rem] items-center">
@@ -288,6 +315,7 @@ function SignedInPhone({ phone, shop }: { phone: string; shop: string }) {
 
 function AccountBar() {
   const [busy, setBusy] = useState(false);
+  const { t } = useT();
   function leave() {
     setBusy(true);
     writeAccountBackup();
@@ -303,35 +331,10 @@ function AccountBar() {
   return (
     <div className="flex items-center gap-2">
       <Button type="button" size="sm" variant="outline" disabled={busy} onClick={leave}>
-        {busy ? "Signing out…" : "Sign out"}
+        {busy ? t("signingOut") : t("signOut")}
       </Button>
     </div>
   );
 }
 
-export function StatusPill({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    pending: "text-warn border-line",
-    sent: "text-accent border-line",
-    reviewing: "text-accent border-line",
-    quoted: "text-accent border-line",
-    accepted: "text-ok border-line",
-    confirmed: "text-ok border-line",
-    finalized: "text-ok border-line",
-    delivered: "text-ok border-line",
-    rejected: "text-danger border-line",
-    order: "text-ink border-line",
-    inquiry: "text-muted border-line",
-    draft: "text-muted border-line",
-  };
-  return (
-    <span
-      className={cn(
-        "inline-flex h-7 items-center rounded-full border bg-surface px-2.5 text-[11px] font-medium uppercase tracking-wide",
-        map[status] ?? "text-muted border-line",
-      )}
-    >
-      {status}
-    </span>
-  );
-}
+export { StatusPill } from "@/components/status-pill";

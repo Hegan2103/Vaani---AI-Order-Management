@@ -170,6 +170,30 @@ async function createPgliteSql(): Promise<Sql> {
   });
 }
 
+async function wipeUserDataOnce(sql: Sql) {
+  const { existsSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const dir = join(process.cwd(), ".data", "vaani-pglite");
+  mkdirSync(dir, { recursive: true });
+  const flag = join(dir, ".wiped-20260825e");
+  if (existsSync(flag)) return;
+  const statements = [
+    `delete from vaani_tickets`,
+    `delete from vaani_otp`,
+    `delete from vaani_profiles`,
+    `delete from "session"`,
+    `delete from "verification"`,
+  ];
+  for (const text of statements) {
+    try {
+      await sql.query(text);
+    } catch {
+      /* table may not exist yet */
+    }
+  }
+  writeFileSync(flag, new Date().toISOString());
+}
+
 let sqlPromise: Promise<Sql> | null = null;
 
 async function createSql(): Promise<Sql> {
@@ -179,7 +203,9 @@ async function createSql(): Promise<Sql> {
         "or a server route loader, never from client code.",
     );
   }
-  return dbSource === "neon" ? createNeonSql() : createPgliteSql();
+  const sql = dbSource === "neon" ? await createNeonSql() : await createPgliteSql();
+  await wipeUserDataOnce(sql);
+  return sql;
 }
 
 /**
