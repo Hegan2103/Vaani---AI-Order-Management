@@ -260,7 +260,32 @@ function CallScreen() {
         {vendor.name} · {vendor.phone} · {INDUSTRY_LABEL[vendor.industry]}
       </p>
 
-      <div className="mx-auto mt-8 max-w-md rounded-[var(--radius-xl)] border border-line bg-surface p-6 text-center">
+      <div className="mx-auto mt-6 max-w-md rounded-[var(--radius-lg)] border border-line bg-surface p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">
+          Example — {INDUSTRY_LABEL[vendor.industry]}
+        </p>
+        <p className="mt-1 text-xs text-muted">
+          Product + quantity to order. Product + cost/rate to ask a price.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {samplesFor(vendor.industry).map((s) => (
+            <button
+              key={s}
+              type="button"
+              className="rounded-full border border-line bg-bg px-3 py-1 text-left text-xs text-muted"
+              onClick={() => {
+                const next = transcript ? `${transcript}\n${s}` : s;
+                transcriptRef.current = next;
+                setTranscript(next);
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto mt-4 max-w-md rounded-[var(--radius-xl)] border border-line bg-surface p-6 text-center">
         <ListenDial mode={dialMode} count={count} />
         <p className="mt-4 font-display text-xl">
           {phase === "idle" && "Connected — hold the line"}

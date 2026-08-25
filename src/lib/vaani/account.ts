@@ -61,23 +61,31 @@ async function createPhoneSession(ten: string) {
   const sessionToken = randomBytes(32).toString("base64url");
   const sessionId = randomBytes(16).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const existing = await sql.query<{ id: string }>(`select id from "user" where email = $1`, [email]);
+  const existing = await sql.query<{ id: string }>(
+    `select id from "user" where email = $1 or id = $2 limit 1`,
+    [email, userId],
+  );
   const uid = existing[0]?.id || userId;
   if (!existing[0]) {
     await sql.query(
       `insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-       values ($1, $2, $3, true, now(), now())`,
+       values ($1, $2, $3, true, now(), now())
+       on conflict (id) do update set name = excluded.name, "updatedAt" = now()`,
       [uid, name, email],
     );
   } else {
-    await sql.query(`update "user" set name = $1, "updatedAt" = now() where id = $2`, [name, uid]);
+    await sql.query(`update "user" set name = $1, email = $2, "updatedAt" = now() where id = $3`, [
+      name,
+      email,
+      uid,
+    ]);
   }
   await sql.query(
     `insert into "session" (id, "expiresAt", token, "createdAt", "updatedAt", "userId")
      values ($1, $2::timestamptz, $3, now(), now(), $4)`,
     [sessionId, expiresAt, sessionToken, uid],
   );
-  return { token: sessionToken, email, phone, name };
+  return { token: sessionToken, email, phone, name, userId: uid };
 }
 
 export const signInWithMobile = createServerFn({ method: "POST" })

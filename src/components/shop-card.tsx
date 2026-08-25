@@ -14,10 +14,9 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const isVendor = useVaani((s) => s.isVendor);
   const language = useVaani((s) => s.language);
   const shopSaved = useVaani((s) => s.shopSaved);
-  const accountReady = useVaani((s) => s.accountReady);
   const setShopIdentity = useVaani((s) => s.setShopIdentity);
 
-  const snap = readShopIdentity();
+  const snap = readShopIdentity(customerPhone);
   const savedName = snap?.shopName || customerName;
   const savedPhone = formatInPhone(snap?.phone || customerPhone);
   const savedIndustry = snap?.industry || industry;
@@ -56,15 +55,6 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
 
   const locked = hasSaved && !editing;
 
-  if (!accountReady && !hasSaved && loginTen.length !== 10) {
-    return (
-      <div className="rounded-[var(--radius-xl)] border border-line bg-surface p-5">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">Your shop</p>
-        <p className="mt-3 text-sm text-muted">Loading previous shop details…</p>
-      </div>
-    );
-  }
-
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const shopName = shopDraft.trim();
@@ -87,7 +77,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     editClicked.current = false;
     setEditing(false);
     setShopBusy(true);
-    setShopMsg(null);
+    setShopMsg("Shop details saved.");
     try {
       const res = await saveProfile({
         data: {
@@ -99,13 +89,9 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
           language: langDraft,
         },
       });
-      if (!res.ok) {
-        setShopMsg(res.error);
-        return;
-      }
-      setShopMsg("Shop details saved.");
-    } catch (err) {
-      setShopMsg(err instanceof Error ? err.message : "Could not save. Try again.");
+      if (res.ok) setShopMsg("Shop details saved.");
+    } catch {
+      /* kept on this phone */
     } finally {
       setShopBusy(false);
     }

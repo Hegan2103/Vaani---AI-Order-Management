@@ -7,6 +7,7 @@ const LAST_TICKET_KEY = "vaani-last-ticket";
 const SHOP_KEY = "vaani-shop-identity-v1";
 const BACKUP_KEY = "vaani-account-backup-v1";
 const LOGIN_PHONE_KEY = "vaani-login-phone";
+const LISTED_KEY = "vaani-listed-vendors-v1";
 
 export type ShopIdentity = {
   shopName: string;
@@ -27,6 +28,16 @@ export function rememberLoginTen(phone: string) {
   try {
     sessionStorage.setItem(LOGIN_PHONE_KEY, ten);
     localStorage.setItem(LOGIN_PHONE_KEY, ten);
+    const known = JSON.parse(localStorage.getItem("vaani-known-phones") || "[]") as string[];
+    if (!known.includes(ten)) {
+      known.push(ten);
+      localStorage.setItem("vaani-known-phones", JSON.stringify(known));
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    document.cookie = `vaani_phone=${ten}; path=/; max-age=2592000; SameSite=Lax`;
   } catch {
     /* ignore */
   }
@@ -35,7 +46,15 @@ export function rememberLoginTen(phone: string) {
 export function readLoginTen() {
   if (typeof window === "undefined") return "";
   try {
-    return sessionStorage.getItem(LOGIN_PHONE_KEY) || localStorage.getItem(LOGIN_PHONE_KEY) || "";
+    const stored = sessionStorage.getItem(LOGIN_PHONE_KEY) || localStorage.getItem(LOGIN_PHONE_KEY) || "";
+    const ten = phoneDigits(stored);
+    if (ten.length === 10) return ten;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const m = document.cookie.match(/(?:^|; )vaani_phone=(\d{10})(?:;|$)/);
+    return m?.[1] ?? "";
   } catch {
     return "";
   }
@@ -107,14 +126,22 @@ export function readAccountBackup(ten?: string, userId?: string): AccountBackup 
   }
 }
 
-export function readShopIdentity(): ShopIdentity | null {
+export function readShopIdentity(phone?: string): ShopIdentity | null {
   if (typeof window === "undefined") return null;
+  const ten = phoneDigits(phone || readLoginTen());
+  const keys = ten.length === 10 ? [`${SHOP_KEY}:${ten}`, SHOP_KEY] : [SHOP_KEY];
   try {
-    const raw = sessionStorage.getItem(SHOP_KEY) || localStorage.getItem(SHOP_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw) as ShopIdentity;
-    if (!p.shopName?.trim()) return null;
-    return p;
+    for (const key of keys) {
+      const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+      if (!raw) continue;
+      const p = JSON.parse(raw) as ShopIdentity;
+      if (!p.shopName?.trim()) continue;
+      if (ten.length === 10 && p.phone && phoneDigits(p.phone).length === 10 && phoneDigits(p.phone) !== ten) {
+        continue;
+      }
+      return p;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -126,9 +153,95 @@ export function writeShopIdentity(p: ShopIdentity) {
     const raw = JSON.stringify(p);
     sessionStorage.setItem(SHOP_KEY, raw);
     localStorage.setItem(SHOP_KEY, raw);
+    const ten = phoneDigits(p.phone);
+    if (ten.length === 10) {
+      sessionStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
+      localStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
+    }
+    if (p.isVendor && ten.length === 10) rememberListedVendor(p);
   } catch {
     /* ignore */
   }
+}
+
+function vendorFromListing(ten: string, shop: string, industry: Industry | "", name?: string): Vendor {
+  const formatted = formatInPhone(ten);
+  const title = shop.trim() || name?.trim() || `Shop ${ten}`;
+  return {
+    id: `v-local-${ten}`,
+    name: title,
+    shop: title,
+    phone: formatted,
+    city: "",
+    industry: industry || "grocery",
+    catalog: [],
+    altPhones: [ten, `+91${ten}`, `91${ten}`, formatted],
+  };
+}
+
+export function rememberListedVendor(p: { shopName: string; phone: string; industry: Industry | "" }) {
+  if (typeof window === "undefined") return;
+  const ten = phoneDigits(p.phone);
+  const shop = p.shopName.trim();
+  if (ten.length !== 10 || !shop) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(LISTED_KEY) || "{}") as Record<string, Vendor>;
+    all[ten] = vendorFromListing(ten, shop, p.industry);
+    localStorage.setItem(LISTED_KEY, JSON.stringify(all));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function listedVendors(): Vendor[] {
+  if (typeof window === "undefined") return [];
+  const byTen = new Map<string, Vendor>();
+  try {
+    const all = JSON.parse(localStorage.getItem(LISTED_KEY) || "{}") as Record<string, Vendor>;
+    for (const [ten, v] of Object.entries(all)) {
+      if (phoneDigits(ten).length === 10) byTen.set(phoneDigits(ten), v);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const backups = JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}") as Record<string, AccountBackup>;
+    for (const [key, row] of Object.entries(backups)) {
+      const ten = phoneDigits(key) || phoneDigits(row.phone);
+      if (ten.length !== 10) continue;
+      if (!byTen.has(ten)) {
+        byTen.set(ten, vendorFromListing(ten, row.shopName || `Shop ${ten}`, row.industry, row.shopName));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(`${SHOP_KEY}:`)) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const p = JSON.parse(raw) as ShopIdentity;
+      const ten = phoneDigits(p.phone) || phoneDigits(key.slice(SHOP_KEY.length + 1));
+      if (ten.length !== 10 || !p.shopName?.trim()) continue;
+      if (!byTen.has(ten)) {
+        byTen.set(ten, vendorFromListing(ten, p.shopName, p.industry));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const known = JSON.parse(localStorage.getItem("vaani-known-phones") || "[]") as string[];
+    for (const ten of known) {
+      if (phoneDigits(ten).length !== 10 || byTen.has(phoneDigits(ten))) continue;
+      byTen.set(phoneDigits(ten), vendorFromListing(phoneDigits(ten), `Shop ${phoneDigits(ten)}`, "grocery"));
+    }
+  } catch {
+    /* ignore */
+  }
+  return [...byTen.values()];
 }
 
 export function restoreLocalAccount(phone?: string) {
@@ -136,7 +249,7 @@ export function restoreLocalAccount(phone?: string) {
   const ten = phoneDigits(phone || readLoginTen());
   const s = useVaani.getState();
   const backup = readAccountBackup(ten, s.accountUserId);
-  const shop = readShopIdentity();
+  const shop = readShopIdentity(ten);
   const shopName = (backup?.shopName || shop?.shopName || s.customerName || "").trim();
   const formatted = formatInPhone(backup?.phone || shop?.phone || ten || s.customerPhone);
   const industry = backup?.industry || shop?.industry || s.industry || "";
@@ -209,26 +322,32 @@ export function vendorById(id: string) {
   const seed = VENDORS.find((v) => v.id === id);
   if (seed) return seed;
   try {
-    return useVaani.getState().liveVendors.find((v) => v.id === id);
+    const live = useVaani.getState().liveVendors.find((v) => v.id === id);
+    if (live) return live;
   } catch {
-    return undefined;
+    /* ignore */
   }
+  return listedVendors().find((v) => v.id === id);
 }
 
 export function vendorForPhone(phone: string) {
   const seed = VENDORS.find((v) => phonesMatch(v.phone, phone));
   if (seed) return seed;
   try {
-    return useVaani.getState().liveVendors.find(
+    const live = useVaani.getState().liveVendors.find(
       (v) => phonesMatch(v.phone, phone) || (v.altPhones ?? []).some((p) => phonesMatch(p, phone)),
     );
+    if (live) return live;
   } catch {
-    return undefined;
+    /* ignore */
   }
+  return listedVendors().find(
+    (v) => phonesMatch(v.phone, phone) || (v.altPhones ?? []).some((p) => phonesMatch(p, phone)),
+  );
 }
 
 function relink(contacts: Contact[], live: Vendor[]): Contact[] {
-  const all = [...VENDORS, ...live];
+  const all = [...VENDORS, ...live, ...listedVendors()];
   return contacts.map((c) => {
     const hit = all.find(
       (v) => phonesMatch(v.phone, c.phone) || (v.altPhones ?? []).some((p) => phonesMatch(p, c.phone)),
@@ -318,6 +437,7 @@ export const useVaani = create<State>()(
           return;
         }
         writeShopIdentity({ ...p, language });
+        if (p.isVendor) rememberListedVendor({ shopName, phone, industry: p.industry });
         set({
           customerName: shopName,
           customerPhone: phone,
@@ -447,8 +567,8 @@ export const useVaani = create<State>()(
           shopSaved: Boolean(p.shopSaved || current.shopSaved || name),
           accountUserId: p.accountUserId || current.accountUserId || "",
           accountReady: false,
-          tickets: p.tickets?.length ? p.tickets : current.tickets,
-          incoming: p.incoming?.length ? p.incoming : current.incoming,
+          tickets: mergeTicketLists(p.tickets ?? [], current.tickets),
+          incoming: mergeTicketLists(p.incoming ?? [], current.incoming),
           claimedVendorId: p.claimedVendorId || current.claimedVendorId || "",
         };
       },

@@ -3,8 +3,7 @@ import { Bell, Phone, Store } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { resetLoginGate } from "@/components/login-screen";
 import { Button } from "@/components/ui/button";
-import { authClient, signOut, storeBearerToken } from "@/lib/auth/client";
-import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { getBearerToken, storeBearerToken } from "@/lib/auth/client";
 import { cn } from "@/lib/cn";
 import { listIncomingTickets, listRegisteredVendors, listTickets, loadAccount, saveLanguage, saveProfile, saveTicket } from "@/lib/vaani/account";
 import { diffTicketEvents, playBeep, ticketFingerprint, unlockBeep } from "@/lib/vaani/notify";
@@ -42,10 +41,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hydrated = useVaani((s) => s.hydrated);
   const accountReady = useVaani((s) => s.accountReady);
   const navigate = useNavigate();
-  const { user, isPending } = useCurrentUserState();
-  const userId = user?.id ?? "";
-  const userEmail = user?.primaryEmail ?? "";
-  const userName = user?.displayName ?? "";
+  const loginTen = readLoginTen();
+  const userId = loginTen ? `vaani-${loginTen}` : "";
+  const userEmail = loginTen ? `91${loginTen}@phone.vaani.app` : "";
+  const userName = loginTen;
+  const isPending = false;
+  const user = loginTen
+    ? { id: userId, displayName: userName, primaryEmail: userEmail }
+    : null;
   const prevFp = useRef("");
   const prevAll = useRef<Ticket[]>([]);
   const restoredFor = useRef("");
@@ -59,7 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         s.setAccountReady(true);
         writeAccountBackup();
       }
-      if (s.customerName.trim() && !readShopIdentity()) {
+      if (s.customerName.trim() && !readShopIdentity(s.customerPhone)) {
         writeShopIdentity({
           shopName: s.customerName,
           phone: s.customerPhone,
@@ -87,7 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     const s = useVaani.getState();
     if (phoneDigits(s.customerPhone) !== ten) {
       useVaani.setState({ customerPhone: formatted });
-      const snap = readShopIdentity();
+      const snap = readShopIdentity(ten);
       if (snap) writeShopIdentity({ ...snap, phone: formatted });
     }
   }, [userId, userEmail, userName]);
@@ -131,131 +134,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (backup?.shopName?.trim() || backup?.tickets?.length || backup?.incoming?.length) {
       setAccountReady(true);
     }
-    if (alreadyFetched || !userId) return;
-    try {
-      localStorage.setItem("vaani-restored", restoreKey);
-    } catch {
-      /* ignore */
-    }
-    resetForUser(userId);
-    restoreLocalAccount(ten);
-    window.setTimeout(() => {
-      void loadAccount({ data: { phone: ten } })
-      .then(async (account) => {
-        const local = useVaani.getState();
-        const localTen = phoneDigits(local.customerPhone);
-        const samePerson = !localTen || !ten || localTen === ten;
-        const p = account.profile;
-        const serverShop = p?.shop_name?.trim() ?? "";
-        const localShop = samePerson ? local.customerName.trim() : "";
-        const shopName = serverShop || localShop || backup?.shopName || "";
-        const phone = formatInPhone(
-          p?.phone || (samePerson ? local.customerPhone : "") || ten || backup?.phone || "",
-        );
-        const industry =
-          ((p?.industry || (samePerson ? local.industry : "") || backup?.industry || "") as Industry | "") || "";
-        const isVendor = Boolean(p?.is_vendor || (samePerson && local.isVendor) || backup?.isVendor);
-        const language = p?.language || (samePerson ? local.language : "") || backup?.language || "hi-IN";
-        if (shopName) {
-          setShopIdentity({
-            shopName,
-            phone,
-            industry,
-            isVendor,
-            language,
-          });
-        } else if (p?.language) {
-          setLanguage(p.language);
-        }
-        if (p?.vendor_id) setClaimedVendor(p.vendor_id);
-        else if (p?.is_vendor) setClaimedVendor(inboxIdForUser(userId));
-        const tickets = mergeTicketLists(samePerson ? local.tickets : [], account.tickets);
-        const incoming = mergeTicketLists(samePerson ? local.incoming : [], account.incoming);
-        replaceTickets(tickets);
-        replaceIncoming(incoming);
-        setAccountReady(true);
-        useVaani.setState({ accountUserId: userId });
-        const all = [...incoming, ...tickets];
-        prevAll.current = all;
-        prevFp.current = ticketFingerprint(all);
-        if (serverShop === "" && shopName) {
-          void saveProfile({
-            data: {
-              shopName,
-              phone,
-              role: isVendor ? "vendor" : "customer",
-              industry,
-              isVendor,
-              language,
-            },
-          }).catch(() => undefined);
-        }
-        if (account.tickets.length === 0 && tickets.length) {
-          await Promise.all(tickets.map((t) => saveTicket({ data: { ticket: t } }).catch(() => undefined)));
-        }
-        if (account.incoming.length === 0 && incoming.length) {
-          await Promise.all(incoming.map((t) => saveTicket({ data: { ticket: t } }).catch(() => undefined)));
-        }
-        writeAccountBackup();
-      })
-      .catch(() => {
-        const local = useVaani.getState();
-        if (local.customerName.trim()) {
-          setShopIdentity({
-            shopName: local.customerName,
-            phone: local.customerPhone,
-            industry: local.industry,
-            isVendor: local.isVendor,
-            language: local.language || "hi-IN",
-          });
-        }
-        setAccountReady(true);
-        restoredFor.current = "";
-      });
-      void listRegisteredVendors()
-        .then((rows) => setLiveVendors(rows))
-        .catch(() => undefined);
-    }, 0);
+    setAccountReady(true);
   }, [isPending, userId, userEmail, hydrated]);
-
-  useEffect(() => {
-    if (isPending || !userId || !hydrated || !accountReady) return;
-    const uid = userId;
-    let alive = true;
-    async function refresh() {
-      try {
-        const vendorKey = claimedVendorId || inboxIdForUser(uid);
-        const [mine, incoming] = await Promise.all([
-          listTickets(),
-          listIncomingTickets({ data: { vendorId: vendorKey } }),
-        ]);
-        if (!alive) return;
-        const all = mergeTicketLists(incoming, mine);
-        const fp = ticketFingerprint(all);
-        if (prevFp.current && fp !== prevFp.current) {
-          const roleNow = useVaani.getState().role;
-          const events = diffTicketEvents(prevAll.current, all).filter((e) => e.audience === roleNow);
-          if (events.length) {
-            pushNotices(events);
-            playBeep();
-          }
-        }
-        prevFp.current = fp;
-        prevAll.current = all;
-        const local = useVaani.getState();
-        replaceTickets(mergeTicketLists(local.tickets, mine));
-        replaceIncoming(mergeTicketLists(local.incoming, incoming));
-      } catch {
-        /* keep last snapshot */
-      }
-    }
-    void refresh();
-    const id = window.setInterval(() => void refresh(), 5000);
-    return () => {
-      alive = false;
-      window.clearInterval(id);
-    };
-  }, [isPending, userId, claimedVendorId, hydrated, accountReady, replaceTickets, replaceIncoming, pushNotices]);
 
   return (
     <div className="min-h-dvh bg-bg text-ink">
@@ -408,35 +288,21 @@ function SignedInPhone({ phone, shop }: { phone: string; shop: string }) {
 
 function AccountBar() {
   const [busy, setBusy] = useState(false);
-  async function leave() {
+  function leave() {
     setBusy(true);
     writeAccountBackup();
     try {
-      localStorage.removeItem("vaani-bearer-v1");
       sessionStorage.removeItem("vaani-session-ok");
-      resetLoginGate();
     } catch {
       /* ignore */
     }
-    try {
-      await Promise.race([
-        signOut("/login"),
-        new Promise((_, reject) => {
-          window.setTimeout(() => reject(new Error("timeout")), 3500);
-        }),
-      ]);
-    } catch {
-      try {
-        await authClient.signOut();
-      } catch {
-        /* local clear is enough */
-      }
-      window.location.replace("/login");
-    }
+    storeBearerToken(null);
+    resetLoginGate();
+    setBusy(false);
   }
   return (
     <div className="flex items-center gap-2">
-      <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void leave()}>
+      <Button type="button" size="sm" variant="outline" disabled={busy} onClick={leave}>
         {busy ? "Signing out…" : "Sign out"}
       </Button>
     </div>

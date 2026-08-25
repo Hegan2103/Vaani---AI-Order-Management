@@ -225,6 +225,14 @@ export function samplesFor(industry: Industry | "" | "all") {
   return SAMPLE_UTTERANCES.grocery;
 }
 
+export function allIndustrySamples() {
+  return (Object.keys(INDUSTRY_LABEL) as Industry[]).map((id) => ({
+    id,
+    label: INDUSTRY_LABEL[id],
+    samples: SAMPLE_UTTERANCES[id],
+  }));
+}
+
 export function phoneDigits(phone: string) {
   const d = phone.replace(/\D/g, "");
   if (d.length >= 10) return d.slice(-10);
