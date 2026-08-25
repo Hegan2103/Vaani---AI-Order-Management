@@ -1,5 +1,5 @@
 import { Pencil } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
@@ -12,7 +12,6 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const industry = useVaani((s) => s.industry);
   const isVendor = useVaani((s) => s.isVendor);
   const language = useVaani((s) => s.language);
-  const shopSaved = useVaani((s) => s.shopSaved);
   const setShopIdentity = useVaani((s) => s.setShopIdentity);
   const setLanguage = useVaani((s) => s.setLanguage);
   const { t, industry: tradeLabel } = useT();
@@ -22,11 +21,12 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const savedPhone = formatInPhone(snap?.phone || customerPhone);
   const savedIndustry = snap?.industry || industry;
   const savedVendor = snap?.isVendor ?? isVendor;
-  const savedLang = snap?.language || language || "hi-IN";
-  const hasSaved = Boolean(savedName.trim()) && (shopSaved || Boolean(snap));
+  const savedLang = snap?.language || language || "en-IN";
+  const hasSaved = Boolean(savedName.trim());
   const loginTen = phoneDigits(savedPhone);
 
-  const [editing, setEditing] = useState(!hasSaved);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState(false);
   const [shopDraft, setShopDraft] = useState(savedName);
   const [phoneDraft, setPhoneDraft] = useState(savedPhone);
   const [industryDraft, setIndustryDraft] = useState<Industry | "">(savedIndustry);
@@ -45,25 +45,21 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   }, [loginTen]);
 
   useEffect(() => {
-    if (editing) return;
+    if (!hasSaved || editing) return;
     setShopDraft(savedName);
     setPhoneDraft(savedPhone);
     setIndustryDraft(savedIndustry);
     setSellDraft(savedVendor);
     setLangDraft(savedLang);
-  }, [editing, savedName, savedPhone, savedIndustry, savedVendor, savedLang]);
+  }, [hasSaved, editing, savedName, savedPhone, savedIndustry, savedVendor, savedLang]);
 
   const locked = hasSaved && !editing;
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    const shopName = shopDraft.trim();
+  function saveShop() {
+    const shopName = (nameRef.current?.value || shopDraft).trim();
     if (!shopName) {
       setShopMsg(t("enterShopName"));
-      return;
-    }
-    if (sellDraft && !industryDraft) {
-      setShopMsg(t("pickTrade"));
+      nameRef.current?.focus();
       return;
     }
     const identity = {
@@ -71,12 +67,18 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
       phone: loginTen.length === 10 ? formatInPhone(loginTen) : phoneDraft.trim(),
       industry: industryDraft,
       isVendor: sellDraft,
-      language: langDraft,
+      language: langDraft || "en-IN",
     };
+    setShopDraft(shopName);
     setShopIdentity(identity);
     editClicked.current = false;
     setEditing(false);
     setShopMsg(t("shopSaved"));
+    void fetch("/api/vaani/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(identity),
+    }).catch(() => undefined);
   }
 
   return (
@@ -121,10 +123,10 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
           ) : null}
         </div>
       ) : (
-        <form className="mt-3" onSubmit={(e) => void onSubmit(e)}>
+        <div className="mt-3">
           <label className="block text-xs text-muted">{t("shopName")}</label>
           <input
-            required
+            ref={nameRef}
             value={shopDraft}
             onChange={(e) => {
               setShopDraft(e.target.value);
@@ -179,8 +181,13 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             />
             <span>{t("sellOnVaani")}</span>
           </label>
+          {shopMsg ? (
+            <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>
+              {shopMsg}
+            </p>
+          ) : null}
           <div className="mt-4 flex gap-2">
-            <Button type="submit" className="flex-1">
+            <Button type="button" className="flex-1" onClick={saveShop}>
               {t("saveShop")}
             </Button>
             {hasSaved ? (
@@ -202,12 +209,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
               </Button>
             ) : null}
           </div>
-          {shopMsg ? (
-            <p className={`mt-2 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>
-              {shopMsg}
-            </p>
-          ) : null}
-        </form>
+        </div>
       )}
       {extra}
     </div>

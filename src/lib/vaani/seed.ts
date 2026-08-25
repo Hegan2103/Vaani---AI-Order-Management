@@ -88,8 +88,8 @@ export const INDUSTRY_LABEL: Record<Industry, string> = {
 };
 
 export const LANGUAGES = [
-  { id: "hi-IN", label: "हिन्दी", short: "HI" },
   { id: "en-IN", label: "English", short: "EN" },
+  { id: "hi-IN", label: "हिन्दी", short: "HI" },
   { id: "gu-IN", label: "ગુજરાતી", short: "GU" },
   { id: "mr-IN", label: "मराठी", short: "MR" },
   { id: "bn-IN", label: "বাংলা", short: "BN" },
@@ -234,8 +234,11 @@ export function allIndustrySamples() {
 }
 
 export function phoneDigits(phone: string) {
-  const d = phone.replace(/\D/g, "");
-  if (d.length >= 10) return d.slice(-10);
+  let d = String(phone ?? "").replace(/\D/g, "");
+  if (d.startsWith("0091") && d.length >= 14) d = d.slice(4);
+  if (d.startsWith("91") && d.length >= 12) d = d.slice(2);
+  if (d.startsWith("0") && d.length === 11) d = d.slice(1);
+  if (d.length > 10) return d.slice(-10);
   return d;
 }
 

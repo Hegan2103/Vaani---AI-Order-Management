@@ -1,9 +1,10 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Bell, Phone, Store } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CustomerHome } from "@/components/customer-home";
 import { resetLoginGate } from "@/components/login-screen";
 import { VendorHome } from "@/components/vendor-home";
+import { CallScreen } from "@/routes/call.$vendorId";
 import { Button } from "@/components/ui/button";
 import { storeBearerToken } from "@/lib/auth/client";
 import { cn } from "@/lib/cn";
@@ -14,6 +15,7 @@ import {
   mergeTicketLists,
   readAccountBackup,
   readLoginTen,
+  readUiLanguage,
   rememberLoginTen,
   restoreLocalAccount,
   readShopIdentity,
@@ -21,10 +23,16 @@ import {
   useVaani,
   writeAccountBackup,
   writeShopIdentity,
+  writeUiLanguage,
 } from "@/lib/vaani/store";
 import type { Industry, Ticket } from "@/lib/vaani/types";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, seedPhone }: { children: ReactNode; seedPhone?: string }) {
+  const seedTen = phoneDigits(seedPhone || "") || (typeof window !== "undefined" ? readLoginTen() : "");
+  if (seedTen.length === 10 && phoneDigits(useVaani.getState().customerPhone) !== seedTen) {
+    useVaani.setState({ customerPhone: formatInPhone(seedTen) });
+    if (typeof window !== "undefined") restoreLocalAccount(seedTen);
+  }
   const role = useVaani((s) => s.role);
   const setRole = useVaani((s) => s.setRole);
   const setShopIdentity = useVaani((s) => s.setShopIdentity);
@@ -41,14 +49,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pushNotices = useVaani((s) => s.pushNotices);
   const resetForUser = useVaani((s) => s.resetForUser);
   const setAccountReady = useVaani((s) => s.setAccountReady);
+  const callVendorId = useVaani((s) => s.callVendorId);
+  const setCallVendorId = useVaani((s) => s.setCallVendorId);
   const hydrated = useVaani((s) => s.hydrated);
   const accountReady = useVaani((s) => s.accountReady);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const onDesk = pathname === "/" || pathname === "/vendor";
+  const onDesk = (pathname === "/" || pathname === "/vendor") && !callVendorId;
   const customerOn = onDesk ? pathname !== "/vendor" : role === "customer";
   const vendorOn = onDesk ? pathname === "/vendor" : role === "vendor";
   const loginTen = readLoginTen();
+  const snap = typeof window !== "undefined" ? readShopIdentity(customerPhone || loginTen) : null;
+  const snapName = (snap?.shopName || "").trim();
+  const snapPhone = snap?.phone || "";
   const userId = loginTen ? `vaani-${loginTen}` : "";
   const userEmail = loginTen ? `91${loginTen}@phone.vaani.app` : "";
   const userName = loginTen;
@@ -60,33 +73,36 @@ export function AppShell({ children }: { children: ReactNode }) {
   const prevAll = useRef<Ticket[]>([]);
   const restoredFor = useRef("");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const hasChip =
+      phoneDigits(customerPhone || snapPhone || loginTen).length === 10 &&
+      Boolean((customerName || snapName).trim());
+    const bar = document.getElementById("vaani-cred-bar");
+    if (hasChip && bar) bar.style.display = "none";
+  }, [customerPhone, customerName, snapPhone, snapName, loginTen]);
+
+  useLayoutEffect(() => {
+    const ten = readLoginTen() || phoneDigits(seedPhone || "") || phoneDigits(useVaani.getState().customerPhone);
+    if (ten.length === 10) {
+      rememberLoginTen(ten);
+      restoreLocalAccount(ten);
+      const bar = document.getElementById("vaani-cred-bar");
+      if (bar && useVaani.getState().customerName.trim() && phoneDigits(useVaani.getState().customerPhone).length === 10) {
+        bar.style.display = "none";
+      }
+    }
     void Promise.resolve(useVaani.persist.rehydrate()).then(() => {
       const s = useVaani.getState();
       s.setHydrated(true);
-      restoreLocalAccount(readLoginTen() || s.customerPhone);
+      const n = readLoginTen() || phoneDigits(s.customerPhone);
+      restoreLocalAccount(n);
+      if (s.language) writeUiLanguage(s.language);
       if (s.customerName.trim() || s.tickets.length || s.incoming.length) {
         s.setAccountReady(true);
         writeAccountBackup();
       }
-      if (s.customerName.trim() && !readShopIdentity(s.customerPhone)) {
-        writeShopIdentity({
-          shopName: s.customerName,
-          phone: s.customerPhone,
-          industry: s.industry,
-          isVendor: s.isVendor,
-          language: s.language || "hi-IN",
-        });
-        s.setShopIdentity({
-          shopName: s.customerName,
-          phone: s.customerPhone,
-          industry: s.industry,
-          isVendor: s.isVendor,
-          language: s.language || "hi-IN",
-        });
-      }
     });
-  }, []);
+  }, [seedPhone]);
 
   useEffect(() => {
     const ten = tenFromEmail(userEmail) || phoneDigits(userName) || readLoginTen();
@@ -132,7 +148,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         phone: backup.phone || formatInPhone(ten),
         industry: backup.industry,
         isVendor: backup.isVendor,
-        language: backup.language || "hi-IN",
+        language: readUiLanguage() || language || backup.language || "en-IN",
       });
     }
     if (backup?.tickets?.length) replaceTickets(backup.tickets);
@@ -150,7 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname, setRole]);
 
   useEffect(() => {
-    const lang = language || "hi-IN";
+    const lang = language || "en-IN";
     document.documentElement.lang = lang;
     document.documentElement.dir = isRtl(lang) ? "rtl" : "ltr";
   }, [language]);
@@ -167,7 +183,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-1 rounded-[var(--radius-lg)] border border-line bg-surface p-1">
               <Link
                 to="/"
-                onClick={() => setRole("customer")}
+                onClick={() => {
+                  setRole("customer");
+                  setCallVendorId("");
+                }}
                 className={cn(
                   "inline-flex h-8 items-center gap-1 rounded-full px-3 text-sm font-medium",
                   customerOn ? "bg-accent text-accent-fg" : "text-muted",
@@ -178,7 +197,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
               <Link
                 to="/vendor"
-                onClick={() => setRole("vendor")}
+                onClick={() => {
+                  setRole("vendor");
+                  setCallVendorId("");
+                }}
                 className={cn(
                   "inline-flex h-8 items-center gap-1 rounded-full px-3 text-sm font-medium",
                   vendorOn ? "bg-accent text-accent-fg" : "text-muted",
@@ -190,7 +212,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
             <select
               aria-label={t("language")}
-              value={language || "hi-IN"}
+              value={language || "en-IN"}
               onChange={(e) => {
                 const next = e.target.value;
                 setLanguage(next);
@@ -205,21 +227,22 @@ export function AppShell({ children }: { children: ReactNode }) {
             </select>
             <NoticeBell />
             <SignedInPhone
-              phone={customerPhone || tenFromEmail(user?.primaryEmail) || user?.displayName || readLoginTen()}
-              shop={customerName}
+              phone={customerPhone || snapPhone || readLoginTen()}
+              shop={customerName || snapName}
             />
             <AccountBar />
           </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl px-4 py-6">
+        {callVendorId && pathname !== "/vendor" ? <CallScreen vendorId={callVendorId} /> : null}
         <div hidden={!onDesk || pathname === "/vendor"}>
           <CustomerHome />
         </div>
         <div hidden={pathname !== "/vendor"}>
           <VendorHome />
         </div>
-        {!onDesk ? children : null}
+        {!onDesk && !callVendorId ? children : null}
       </main>
     </div>
   );

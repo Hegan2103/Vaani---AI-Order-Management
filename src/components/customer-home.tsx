@@ -9,17 +9,18 @@ import {
   OrderDateFilter,
   type DateFilter,
 } from "@/components/order-date-filter";
+import { keepSession } from "@/components/login-screen";
 import { ShopCard } from "@/components/shop-card";
 import { Button } from "@/components/ui/button";
-import { listRegisteredVendors } from "@/lib/vaani/account";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { listedVendors, readLoginTen, rememberLoginTen, restoreLocalAccount, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
   const navigate = useNavigate();
   const setRole = useVaani((s) => s.setRole);
+  const setCallVendorId = useVaani((s) => s.setCallVendorId);
   const contacts = useVaani((s) => s.contacts);
   const tickets = useVaani((s) => s.tickets);
   const customerPhone = useVaani((s) => s.customerPhone);
@@ -31,27 +32,35 @@ export function CustomerHome() {
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
+  const meTen = phoneDigits(customerPhone) || readLoginTen();
+
   const filtered = useMemo(() => {
     return contacts.filter((c) => {
-      const v = vendorForPhone(c.phone) ?? (c.vendorId ? vendorById(c.vendorId) : undefined);
-      if (industry !== "all" && v?.industry !== industry) return false;
-      const hay = `${c.name} ${c.phone} ${v?.city ?? ""} ${v?.shop ?? ""}`.toLowerCase();
+      if (meTen.length === 10 && phoneDigits(c.phone) === meTen) return false;
+      const v = vendorForPhone(c.phone);
+      if (industry !== "all" && v?.industry && v.industry !== industry) return false;
+      const hay = `${c.name} ${c.phone}`.toLowerCase();
       return hay.includes(q.toLowerCase());
     });
-  }, [contacts, q, industry, liveVendors]);
+  }, [contacts, q, industry, liveVendors, meTen]);
 
   async function pullDirectory() {
+    const ten = readLoginTen() || phoneDigits(customerPhone);
+    if (ten.length === 10) rememberLoginTen(ten);
+    keepSession();
     try {
-      const rows = await listRegisteredVendors();
-      const local = listedVendors();
+      const res = await fetch("/api/vaani/vendors");
+      const rows = res.ok ? ((await res.json()) as unknown) : [];
+      const remote = Array.isArray(rows) ? rows : [];
+      const local = listedVendors().filter((v) => phoneDigits(v.phone) !== ten);
       const byTen = new Map<string, (typeof local)[number]>();
-      for (const v of [...local, ...(Array.isArray(rows) ? rows : [])]) {
-        const ten = v.phone.replace(/\D/g, "").slice(-10);
-        if (ten.length === 10) byTen.set(ten, v);
+      for (const v of [...local, ...remote]) {
+        const n = phoneDigits(v.phone);
+        if (n.length === 10 && n !== ten) byTen.set(n, v);
       }
       useVaani.getState().setLiveVendors([...byTen.values()]);
     } catch {
-      const local = listedVendors();
+      const local = listedVendors().filter((v) => phoneDigits(v.phone) !== ten);
       if (local.length) useVaani.getState().setLiveVendors(local);
     }
     const nav = navigator as Navigator & {
@@ -59,24 +68,34 @@ export function CustomerHome() {
         select: (
           props: string[],
           opts: { multiple: boolean },
-        ) => Promise<Array<{ name?: string[]; tel?: string[] }>>;
+        ) => Promise<Array<{ name?: string[]; tel?: unknown[] }>>;
       };
     };
     try {
       if (nav.contacts?.select) {
+        keepSession();
+        if (ten.length === 10) rememberLoginTen(ten);
         const picked = await nav.contacts.select(["name", "tel"], { multiple: true });
+        keepSession();
+        restoreLocalAccount(ten);
+        if (ten.length === 10) rememberLoginTen(ten);
         const extra: Contact[] = [];
         for (const p of picked) {
-          const phone = p.tel?.[0];
+          const raw = p.tel?.[0];
+          const phone =
+            typeof raw === "string"
+              ? raw
+              : raw && typeof raw === "object" && raw !== null && "value" in raw
+                ? String((raw as { value: string }).value)
+                : "";
           if (!phone) continue;
-          const matched =
-            vendorForPhone(phone) ??
-            VENDORS.find((v) => v.phone.replace(/\s/g, "") === phone.replace(/\s/g, ""));
+          if (ten.length === 10 && phoneDigits(phone) === ten) continue;
+          const bookName = Array.isArray(p.name) ? p.name.find((n) => n?.trim()) || phone : phone;
           extra.push({
             id: crypto.randomUUID(),
-            name: p.name?.[0] || phone,
+            name: bookName,
             phone,
-            vendorId: matched?.id ?? null,
+            vendorId: vendorForPhone(phone)?.id ?? null,
             source: "phone",
           });
         }
@@ -85,7 +104,9 @@ export function CustomerHome() {
         return;
       }
     } catch {
-      /* permission denied — fall through */
+      keepSession();
+      restoreLocalAccount(ten);
+      if (ten.length === 10) rememberLoginTen(ten);
     }
     const extras: Contact[] = [
       {
@@ -110,7 +131,7 @@ export function CustomerHome() {
         source: "phone",
       },
     ];
-    mergeContacts(extras);
+    mergeContacts(extras.filter((c) => phoneDigits(c.phone) !== ten));
     setImportMsg(t("loadedVendors"));
   }
 
@@ -138,7 +159,6 @@ export function CustomerHome() {
           </ol>
         </div>
         <ShopCard
-          key={phoneDigits(customerPhone) || "shop"}
           extra={
             <Button className="mt-4 w-full" variant="outline" onClick={() => void pullDirectory()}>
               <BookUser className="size-4" />
@@ -173,7 +193,8 @@ export function CustomerHome() {
 
       <ul className="divide-y divide-line rounded-[var(--radius-xl)] border border-line bg-surface">
         {filtered.map((c) => {
-          const v = vendorForPhone(c.phone) ?? (c.vendorId ? vendorById(c.vendorId) : undefined);
+          const ten = phoneDigits(c.phone);
+          const v = ten.length === 10 && ten !== meTen ? vendorForPhone(c.phone) : undefined;
           return (
             <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
@@ -184,15 +205,21 @@ export function CustomerHome() {
                 </p>
               </div>
               {v ? (
-                <Link
-                  to="/call/$vendorId"
-                  params={{ vendorId: v.id }}
-                  className="inline-flex h-9 items-center gap-1 rounded-full bg-accent px-3 text-sm font-medium text-accent-fg"
-                  onClick={() => setRole("customer")}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 rounded-full px-3"
+                  onClick={() => {
+                    const ten = readLoginTen();
+                    if (ten.length === 10) rememberLoginTen(ten);
+                    keepSession();
+                    setRole("customer");
+                    setCallVendorId(v.id);
+                  }}
                 >
                   <Phone className="size-3.5" />
                   {t("dial")}
-                </Link>
+                </Button>
               ) : (
                 <span className="text-xs text-subtle">{t("notOnVaani")}</span>
               )}

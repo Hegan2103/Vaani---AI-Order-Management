@@ -16,6 +16,8 @@ import { Route as CallVendorIdRouteImport } from './routes/call.$vendorId'
 import { Route as CopyTicketIdRouteImport } from './routes/copy.$ticketId'
 import { Route as TicketTicketIdRouteImport } from './routes/ticket.$ticketId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiVaaniProfileRouteImport } from './routes/api/vaani/profile'
+import { Route as ApiVaaniVendorsRouteImport } from './routes/api/vaani/vendors'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +54,16 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVaaniProfileRoute = ApiVaaniProfileRouteImport.update({
+  id: '/api/vaani/profile',
+  path: '/api/vaani/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaaniVendorsRoute = ApiVaaniVendorsRouteImport.update({
+  id: '/api/vaani/vendors',
+  path: '/api/vaani/vendors',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +73,8 @@ export interface FileRoutesByFullPath {
   '/copy/$ticketId': typeof CopyTicketIdRoute
   '/ticket/$ticketId': typeof TicketTicketIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/vaani/profile': typeof ApiVaaniProfileRoute
+  '/api/vaani/vendors': typeof ApiVaaniVendorsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +84,8 @@ export interface FileRoutesByTo {
   '/copy/$ticketId': typeof CopyTicketIdRoute
   '/ticket/$ticketId': typeof TicketTicketIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/vaani/profile': typeof ApiVaaniProfileRoute
+  '/api/vaani/vendors': typeof ApiVaaniVendorsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +96,8 @@ export interface FileRoutesById {
   '/copy/$ticketId': typeof CopyTicketIdRoute
   '/ticket/$ticketId': typeof TicketTicketIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/vaani/profile': typeof ApiVaaniProfileRoute
+  '/api/vaani/vendors': typeof ApiVaaniVendorsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +109,8 @@ export interface FileRouteTypes {
     | '/copy/$ticketId'
     | '/ticket/$ticketId'
     | '/api/auth/$'
+    | '/api/vaani/profile'
+    | '/api/vaani/vendors'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +120,8 @@ export interface FileRouteTypes {
     | '/copy/$ticketId'
     | '/ticket/$ticketId'
     | '/api/auth/$'
+    | '/api/vaani/profile'
+    | '/api/vaani/vendors'
   id:
     | '__root__'
     | '/'
@@ -109,6 +131,8 @@ export interface FileRouteTypes {
     | '/copy/$ticketId'
     | '/ticket/$ticketId'
     | '/api/auth/$'
+    | '/api/vaani/profile'
+    | '/api/vaani/vendors'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +143,8 @@ export interface RootRouteChildren {
   CopyTicketIdRoute: typeof CopyTicketIdRoute
   TicketTicketIdRoute: typeof TicketTicketIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiVaaniProfileRoute: typeof ApiVaaniProfileRoute
+  ApiVaaniVendorsRoute: typeof ApiVaaniVendorsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +198,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vaani/profile': {
+      id: '/api/vaani/profile'
+      path: '/api/vaani/profile'
+      fullPath: '/api/vaani/profile'
+      preLoaderRoute: typeof ApiVaaniProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vaani/vendors': {
+      id: '/api/vaani/vendors'
+      path: '/api/vaani/vendors'
+      fullPath: '/api/vaani/vendors'
+      preLoaderRoute: typeof ApiVaaniVendorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,6 +223,8 @@ const rootRouteChildren: RootRouteChildren = {
   CopyTicketIdRoute: CopyTicketIdRoute,
   TicketTicketIdRoute: TicketTicketIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiVaaniProfileRoute: ApiVaaniProfileRoute,
+  ApiVaaniVendorsRoute: ApiVaaniVendorsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

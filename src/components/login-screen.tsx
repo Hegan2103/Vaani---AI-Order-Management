@@ -1,7 +1,15 @@
-import { Component, useLayoutEffect, useState, type ReactNode } from "react";
+import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { GROK_PROVIDERS, signIn, storeBearerToken } from "@/lib/auth/client";
-import { loginPhoneKey, purgeStaleClientCache, readLoginTen, rememberListedVendor, rememberLoginTen, restoreLocalAccount, useVaani } from "@/lib/vaani/store";
+import {
+  loginPhoneKey,
+  readLoginTen,
+  readUiLanguage,
+  rememberLoginTen,
+  restoreLocalAccount,
+  useVaani,
+  writeUiLanguage,
+} from "@/lib/vaani/store";
 import { LANGUAGES } from "@/lib/vaani/seed";
 import { isRtl, t as tr, useT } from "@/lib/vaani/i18n";
 
@@ -9,10 +17,6 @@ const ENTERED_KEY = "vaani-entered";
 const TYPING_KEY = "vaani-typing-phone";
 let stickyEntered = false;
 let typed = "";
-if (typeof window !== "undefined" && purgeStaleClientCache()) {
-  stickyEntered = false;
-  typed = "";
-}
 
 function toTen(raw: string) {
   let d = String(raw ?? "").replace(/\D/g, "");
@@ -43,19 +47,7 @@ function loadTyping() {
 function readEntered() {
   if (typeof window === "undefined") return false;
   if (stickyEntered) return true;
-  try {
-    if (localStorage.getItem(ENTERED_KEY) === "1" && readLoginTen().length === 10) return true;
-    if (sessionStorage.getItem(ENTERED_KEY) === "1" && readLoginTen().length === 10) return true;
-  } catch {
-    /* ignore */
-  }
   return readLoginTen().length === 10;
-}
-
-function applyEnteredDom(on: boolean) {
-  if (typeof document === "undefined") return;
-  if (on) document.documentElement.setAttribute("data-vaani-on", "1");
-  else document.documentElement.removeAttribute("data-vaani-on");
 }
 
 function markEntered() {
@@ -71,10 +63,12 @@ function markEntered() {
   } catch {
     /* ignore */
   }
-  applyEnteredDom(true);
   window.dispatchEvent(new Event("vaani-auth"));
 }
 
+export function keepSession() {
+  if (readLoginTen().length === 10) markEntered();
+}
 export function setOtpLock(_on: boolean) {}
 export function markSessionOk(on: boolean) {
   if (on) markEntered();
@@ -102,8 +96,24 @@ export function resetLoginGate() {
   } catch {
     /* ignore */
   }
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("v");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    /* ignore */
+  }
+  try {
+    const bar = document.getElementById("vaani-cred-bar");
+    if (bar) {
+      bar.textContent = "";
+      bar.style.display = "none";
+    }
+    document.documentElement.removeAttribute("data-vaani-phone");
+  } catch {
+    /* ignore */
+  }
   storeBearerToken(null);
-  applyEnteredDom(false);
   window.dispatchEvent(new Event("vaani-auth"));
 }
 
@@ -116,7 +126,7 @@ class ShellGuard extends Component<{ children: ReactNode }, { message: string }>
     if (this.state.message) {
       return (
         <main className="min-h-dvh bg-bg p-6 text-ink">
-          <p className="font-medium">{tr(useVaani.getState().language || "hi-IN", "shopViewError")}</p>
+          <p className="font-medium">{tr(useVaani.getState().language || "en-IN", "shopViewError")}</p>
           <p className="mt-2 text-sm text-danger">{this.state.message}</p>
         </main>
       );
@@ -125,55 +135,80 @@ class ShellGuard extends Component<{ children: ReactNode }, { message: string }>
   }
 }
 
-export function LoginGate({ children }: { children: ReactNode }) {
-  const [on, setOn] = useState(false);
+export function LoginGate({ children, startOn }: { children: ReactNode; startOn?: boolean }) {
+  const [on, setOn] = useState(Boolean(startOn));
 
   useLayoutEffect(() => {
-    const sync = () => {
-      const next = readEntered();
-      setOn(next);
-      applyEnteredDom(next);
+    const lang = useVaani.getState().language || readUiLanguage();
+    if (lang) {
+      document.documentElement.lang = lang;
+      document.documentElement.dir = isRtl(lang) ? "rtl" : "ltr";
+      if (useVaani.getState().language !== lang) useVaani.getState().setLanguage(lang);
+    }
+    const ten = readLoginTen();
+    const entered = Boolean(startOn) || stickyEntered || ten.length === 10;
+    if (entered) {
+      stickyEntered = true;
+      restoreLocalAccount(ten);
+      setOn(true);
+    } else {
+      setOn(false);
+    }
+    const sync = (ev?: Event) => {
+      if (stickyEntered || readLoginTen().length === 10) {
+        stickyEntered = true;
+        restoreLocalAccount(readLoginTen());
+        setOn(true);
+        return;
+      }
+      if (ev?.type === "vaani-auth") setOn(false);
     };
-    sync();
     window.addEventListener("vaani-auth", sync);
-    return () => window.removeEventListener("vaani-auth", sync);
-  }, []);
+    window.addEventListener("pageshow", sync);
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.removeEventListener("vaani-auth", sync);
+      window.removeEventListener("pageshow", sync);
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [startOn]);
 
-  return (
-    <>
-      <div hidden={!on}>
-        <ShellGuard>{children}</ShellGuard>
-      </div>
-      <div hidden={on} className={on ? undefined : "fixed inset-0 z-[80] overflow-auto bg-bg"}>
-        <LoginScreen
-          key={on ? "in" : "out"}
-          onEntered={() => {
-            markEntered();
-            setOn(true);
-          }}
-        />
-      </div>
-    </>
-  );
+  if (!on) {
+    return (
+      <LoginScreen
+        onEntered={() => {
+          markEntered();
+          restoreLocalAccount(readLoginTen());
+          setOn(true);
+        }}
+      />
+    );
+  }
+  return <ShellGuard>{children}</ShellGuard>;
 }
 
 export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
-  const [phone, setPhone] = useState(() => loadTyping());
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [previewCode, setPreviewCode] = useState("");
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const otpRef = useRef<HTMLInputElement>(null);
   const language = useVaani((s) => s.language);
   const setLanguage = useVaani((s) => s.setLanguage);
   const { t } = useT();
 
-  useLayoutEffect(() => {
-    const clearIfSignedOut = () => {
-      if (readEntered()) return;
-      persistTyping("");
-      setPhone("");
-      setErr(null);
-    };
-    window.addEventListener("vaani-auth", clearIfSignedOut);
-    return () => window.removeEventListener("vaani-auth", clearIfSignedOut);
-  }, []);
+  function livePhone() {
+    return toTen(phoneRef.current?.value || phone);
+  }
+
+  function liveOtp() {
+    return String(otpRef.current?.value || otp).replace(/\D/g, "").slice(0, 6);
+  }
 
   function setDigits(next: string) {
     const ten = toTen(next);
@@ -182,27 +217,94 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     setErr(null);
   }
 
-  function enter() {
-    const ten = toTen(phone || loadTyping());
+  useEffect(() => {
+    if (step !== "phone") return;
+    const el = phoneRef.current;
+    if (!el) return;
+    const sync = () => setDigits(el.value);
+    el.addEventListener("input", sync);
+    el.addEventListener("keyup", sync);
+    el.addEventListener("change", sync);
+    return () => {
+      el.removeEventListener("input", sync);
+      el.removeEventListener("keyup", sync);
+      el.removeEventListener("change", sync);
+    };
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== "otp") return;
+    const el = otpRef.current;
+    if (!el) return;
+    const sync = () => {
+      const code = el.value.replace(/\D/g, "").slice(0, 6);
+      setOtp(code);
+      setErr(null);
+    };
+    el.addEventListener("input", sync);
+    el.addEventListener("keyup", sync);
+    el.addEventListener("change", sync);
+    return () => {
+      el.removeEventListener("input", sync);
+      el.removeEventListener("keyup", sync);
+      el.removeEventListener("change", sync);
+    };
+  }, [step]);
+
+  function requestCode() {
+    const ten = livePhone();
     if (ten.length !== 10) {
       setErr(t("tapTen"));
       return;
     }
+    const code = String(100000 + Math.floor(Math.random() * 900000));
+    try {
+      sessionStorage.setItem("vaani-otp-code", `${ten}:${code}`);
+    } catch {
+      /* ignore */
+    }
+    setPhone(ten);
+    setOtp("");
+    setPreviewCode(code);
+    setStep("otp");
+    setErr(null);
+  }
+
+  function finish(ten: string) {
     rememberLoginTen(ten);
-    restoreLocalAccount(ten);
-    const s = useVaani.getState();
-    s.setAccountReady(true);
+    stickyEntered = true;
     useVaani.setState({ customerPhone: `+91 ${ten.slice(0, 5)} ${ten.slice(5)}` });
-    rememberListedVendor({
-      shopName: s.customerName.trim() || `Shop ${ten}`,
-      phone: ten,
-      industry: s.industry || "grocery",
-    });
+    restoreLocalAccount(ten);
+    useVaani.getState().setAccountReady(true);
     markEntered();
     onEntered?.();
   }
 
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK"] as const;
+  function checkCode() {
+    const ten = livePhone() || toTen(phone);
+    const code = liveOtp();
+    if (ten.length !== 10) {
+      setErr(t("tapTen"));
+      setStep("phone");
+      return;
+    }
+    if (code.length !== 6) {
+      setErr(t("otpCount", { n: code.length }));
+      return;
+    }
+    let expected = previewCode;
+    try {
+      const saved = sessionStorage.getItem("vaani-otp-code") || "";
+      if (saved.startsWith(`${ten}:`)) expected = saved.slice(ten.length + 1);
+    } catch {
+      /* ignore */
+    }
+    if (code !== expected) {
+      setErr(t("wrongCode"));
+      return;
+    }
+    finish(ten);
+  }
 
   return (
     <main className="min-h-dvh bg-bg text-ink">
@@ -211,12 +313,11 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
           <div className="mb-4 flex justify-end">
             <select
               aria-label={t("language")}
-              value={language || "hi-IN"}
+              value={language || "en-IN"}
               onChange={(e) => {
                 const next = e.target.value;
                 setLanguage(next);
-                document.documentElement.lang = next;
-                document.documentElement.dir = isRtl(next) ? "rtl" : "ltr";
+                writeUiLanguage(next);
               }}
               className="h-9 rounded-[var(--radius-sm)] border border-line bg-bg px-2 text-xs"
             >
@@ -229,69 +330,115 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
           </div>
           <p className="font-display text-3xl tracking-tight">Vaani</p>
           <h1 className="mt-1 text-lg font-medium">{t("signIn")}</h1>
-          <p className="mt-3 text-sm text-muted">{t("enterMobile")}</p>
 
-          <p className="mt-5 text-xs text-muted">{t("mobile")}</p>
-          <div className="mt-1 flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-white px-3 py-3">
-            <span className="text-sm text-muted">+91</span>
-            <p className="min-h-7 flex-1 font-medium tracking-[0.28em] text-ink">
-              {phone || <span className="tracking-normal text-subtle">__________</span>}
-            </p>
-          </div>
-          <div className="mt-2 grid grid-cols-10 gap-1">
-            {Array.from({ length: 10 }, (_, i) => (
-              <span key={i} className={`h-1.5 rounded-full ${i < phone.length ? "bg-accent" : "bg-line"}`} />
-            ))}
-          </div>
-          <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
-            {phone.length === 10 ? t("digitsReady", { n: phone.length }) : t("digitsCount", { n: phone.length })}
-          </p>
-
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {keys.map((k) => (
+          {step === "phone" ? (
+            <>
+              <p className="mt-3 text-sm text-muted">{t("enterMobile")}</p>
+              <p className="mt-5 text-xs text-muted">{t("mobile")}</p>
+              <div className="mt-1 flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-white px-3 py-3">
+                <span className="text-sm text-muted">+91</span>
+                <input
+                  ref={phoneRef}
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  name="mobile"
+                  maxLength={10}
+                  defaultValue=""
+                  placeholder="9876543210"
+                  className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
+                />
+              </div>
+              <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
+                {phone.length === 10 ? t("digitsReady", { n: phone.length }) : t("digitsCount", { n: phone.length })}
+              </p>
               <button
-                key={k}
                 type="button"
-                className="h-14 rounded-[var(--radius-md)] border border-line bg-bg text-lg font-medium text-ink active:bg-accent-soft"
-                onClick={() => {
-                  if (k === "⌫") {
-                    setDigits(phone.slice(0, -1));
-                    return;
-                  }
-                  if (k === "OK") {
-                    enter();
-                    return;
-                  }
-                  if (phone.length >= 10) return;
-                  setDigits(phone + k);
-                }}
+                className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+                onClick={requestCode}
               >
-                {k}
+                {t("sendCode")}
               </button>
-            ))}
-          </div>
-
-          <Button className="mt-4 w-full" size="lg" type="button" onClick={enter}>
-            {t("signIn")}
-          </Button>
-          {err ? <p className="mt-3 text-sm text-danger">{err}</p> : null}
-
-          <div className="mt-6 border-t border-line pt-4">
-            <p className="mb-2 text-xs text-muted">{t("orContinue")}</p>
-            <div className="space-y-2">
-              {GROK_PROVIDERS.filter((p) => p.idp !== "twitter" && p.providerId !== "grok-x").map((p) => (
+            </>
+          ) : (
+            <>
+              <p className="mt-3 text-sm text-muted">
+                {t("enterOtp", { phone: `+91 ${phone.slice(0, 5)} ${phone.slice(5)}` })}
+              </p>
+              {previewCode ? (
+                <p className="mt-3 rounded-[var(--radius-md)] bg-accent-soft px-3 py-2 text-sm font-medium">
+                  {t("previewCode", { code: previewCode })}
+                </p>
+              ) : null}
+              <p className="mt-5 text-xs text-muted">{t("otpLabel")}</p>
+              <input
+                ref={otpRef}
+                type="tel"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                name="otp"
+                maxLength={6}
+                defaultValue=""
+                placeholder="______"
+                className="mt-1 h-12 w-full rounded-[var(--radius-md)] border border-line bg-white px-3 text-center text-xl font-medium tracking-[0.4em] outline-none"
+              />
+              <p className={`mt-2 text-sm ${otp.length === 6 ? "font-medium text-ink" : "text-muted"}`}>
+                {otp.length === 6 ? t("otpReady", { n: otp.length }) : t("otpCount", { n: otp.length })}
+              </p>
+              <button
+                type="button"
+                className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+                onClick={checkCode}
+              >
+                {t("verifySignIn")}
+              </button>
+              <div className="mt-3 flex gap-2">
                 <Button
-                  key={p.providerId}
                   type="button"
                   variant="outline"
-                  className="w-full"
-                  onClick={() => void signIn(p.providerId, { callbackURL: "/" })}
+                  className="flex-1"
+                  disabled={busy}
+                  onClick={() => void requestCode()}
                 >
-                  {t("continueWith", { name: p.label })}
+                  {t("resendCode")}
                 </Button>
-              ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  disabled={busy}
+                  onClick={() => {
+                    setStep("phone");
+                    setOtp("");
+                    setPreviewCode("");
+                    setErr(null);
+                  }}
+                >
+                  {t("changeNumber")}
+                </Button>
+              </div>
+            </>
+          )}
+          {err ? <p className="mt-3 text-sm text-danger">{err}</p> : null}
+
+          {step === "phone" ? (
+            <div className="mt-6 border-t border-line pt-4">
+              <p className="mb-2 text-xs text-muted">{t("orContinue")}</p>
+              <div className="space-y-2">
+                {GROK_PROVIDERS.filter((p) => p.idp !== "twitter" && p.providerId !== "grok-x").map((p) => (
+                  <Button
+                    key={p.providerId}
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => void signIn(p.providerId, { callbackURL: "/" })}
+                  >
+                    {t("continueWith", { name: p.label })}
+                  </Button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
     </main>

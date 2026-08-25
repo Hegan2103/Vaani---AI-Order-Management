@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Mic, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { StatusPill } from "@/components/app-shell";
+import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { saveTicket } from "@/lib/vaani/account";
 import { parseVoiceOrder } from "@/lib/vaani/ai";
@@ -11,12 +11,16 @@ import { useT } from "@/lib/vaani/i18n";
 import { findOpenTicket, readLoginTen, useVaani, vendorById } from "@/lib/vaani/store";
 import type { LineItem, Ticket } from "@/lib/vaani/types";
 
-export const Route = createFileRoute("/call/$vendorId")({ component: CallScreen });
+export const Route = createFileRoute("/call/$vendorId")({ component: CallRoute });
 
 const READY_SECS = 3;
 
-function CallScreen() {
+function CallRoute() {
   const { vendorId } = Route.useParams();
+  return <CallScreen vendorId={vendorId} />;
+}
+
+export function CallScreen({ vendorId }: { vendorId: string }) {
   const liveVendors = useVaani((s) => s.liveVendors);
   const found = vendorById(vendorId) ?? liveVendors.find((v) => v.id === vendorId);
   const navigate = useNavigate();
@@ -25,6 +29,7 @@ function CallScreen() {
   const language = useVaani((s) => s.language);
   const { t, industry: tradeLabel } = useT();
   const upsertTicket = useVaani((s) => s.upsertTicket);
+  const setCallVendorId = useVaani((s) => s.setCallVendorId);
 
   const [phase, setPhase] = useState<"idle" | "countdown" | "recording" | "parsing" | "review">("idle");
   const [count, setCount] = useState(0);
@@ -211,6 +216,7 @@ function CallScreen() {
         updatedAt: new Date().toISOString(),
       };
       upsertTicket(next);
+      setCallVendorId("");
       try {
         await saveTicket({ data: { ticket: next } });
       } catch {
@@ -234,6 +240,7 @@ function CallScreen() {
       updatedAt: new Date().toISOString(),
     };
     upsertTicket(ticket);
+    setCallVendorId("");
     try {
       await saveTicket({ data: { ticket } });
     } catch {
@@ -245,7 +252,10 @@ function CallScreen() {
   if (!found) {
     return (
       <>
-        <p>{t("vendorNotFound")}</p>
+        <Button type="button" variant="outline" size="sm" onClick={() => setCallVendorId("")}>
+          {t("back")}
+        </Button>
+        <p className="mt-3">{t("vendorNotFound")}</p>
       </>
     );
   }
@@ -256,7 +266,10 @@ function CallScreen() {
 
   return (
     <>
-      <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted">{t("calling")}</p>
+      <Button type="button" variant="outline" size="sm" onClick={() => setCallVendorId("")}>
+        {t("back")}
+      </Button>
+      <p className="mt-4 text-xs font-medium uppercase tracking-[0.16em] text-muted">{t("calling")}</p>
       <h1 className="mt-1 font-display text-4xl tracking-tight">{vendor.shop}</h1>
       <p className="text-sm text-muted">
         {vendor.name} · {vendor.phone} · {tradeLabel(vendor.industry)}

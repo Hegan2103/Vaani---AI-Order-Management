@@ -134,7 +134,7 @@ function TicketPage() {
         vendor: vendor?.name ?? vendor?.shop ?? "Vendor",
         customer: ticket.customerName,
         industry: vendor?.industry ?? "grocery",
-        language: language || ticket.language || "hi-IN",
+        language: language || ticket.language || "en-IN",
         lines: ticket.lines,
       },
     });

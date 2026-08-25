@@ -32,11 +32,8 @@
   #root {
     min-height: 100%;
   }
-  body {
-    background: var(--color-bg);
-    color: var(--color-ink);
-    font-family: var(--font-sans);
-    line-height: 1.5;
+  html[data-vaani-on] .vaani-login-overlay {
+    display: none !important;
   }
 }
 

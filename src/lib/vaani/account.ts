@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { vaaniGate } from "./gate";
 import { getSql, type Sql } from "@/lib/db";
@@ -36,7 +36,7 @@ async function ensureVaaniSchema(sql: Sql) {
   await sql.query(`alter table vaani_profiles add column if not exists vendor_id text not null default ''`);
   await sql.query(`alter table vaani_profiles add column if not exists industry text not null default ''`);
   await sql.query(`alter table vaani_profiles add column if not exists is_vendor boolean not null default false`);
-  await sql.query(`alter table vaani_profiles add column if not exists language text not null default 'hi-IN'`);
+  await sql.query(`alter table vaani_profiles add column if not exists language text not null default 'en-IN'`);
   await sql.query(`
     create table if not exists vaani_tickets (
       id text primary key,
@@ -102,6 +102,58 @@ export const signInWithMobile = createServerFn({ method: "POST" })
     }
   });
 
+export const sendOtp = createServerFn({ method: "POST" })
+  .validator((input: { phone: string }) => input)
+  .handler(async ({ data }) => {
+    const ten = digits(data.phone);
+    if (ten.length !== 10) return { ok: false as const, error: "Enter a 10-digit Indian mobile number." };
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const n = randomBytes(3).readUIntBE(0, 3) % 900000;
+    const code = String(100000 + n);
+    const hash = createHash("sha256").update(`${ten}:${code}`).digest("hex");
+    const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    await sql.query(
+      `insert into vaani_otp (phone, code_hash, expires_at, attempts)
+       values ($1, $2, $3::timestamptz, 0)
+       on conflict (phone) do update set code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0`,
+      [ten, hash, expires],
+    );
+    return { ok: true as const, previewCode: code };
+  });
+
+export const verifyOtp = createServerFn({ method: "POST" })
+  .validator((input: { phone: string; code: string }) => input)
+  .handler(async ({ data }) => {
+    const ten = digits(data.phone);
+    const code = String(data.code ?? "").replace(/\D/g, "").slice(0, 6);
+    if (ten.length !== 10) return { ok: false as const, error: "Enter a 10-digit Indian mobile number." };
+    if (code.length !== 6) return { ok: false as const, error: "Enter the 6-digit code." };
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql.query<{ code_hash: string; expires_at: string | Date; attempts: number }>(
+      `select code_hash, expires_at, attempts from vaani_otp where phone = $1`,
+      [ten],
+    );
+    const row = rows[0];
+    if (!row) return { ok: false as const, error: "Request a new code." };
+    if (Number(row.attempts) >= 5) return { ok: false as const, error: "Too many tries. Request a new code." };
+    if (new Date(row.expires_at).getTime() < Date.now()) return { ok: false as const, error: "Code expired. Request a new code." };
+    const hash = createHash("sha256").update(`${ten}:${code}`).digest("hex");
+    if (hash !== row.code_hash) {
+      await sql.query(`update vaani_otp set attempts = attempts + 1 where phone = $1`, [ten]);
+      return { ok: false as const, error: "Wrong code. Try again." };
+    }
+    await sql.query(`delete from vaani_otp where phone = $1`, [ten]);
+    try {
+      const session = await createPhoneSession(ten);
+      return { ok: true as const, ...session };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not start session.";
+      return { ok: false as const, error: msg };
+    }
+  });
+
 export const loadProfile = createServerFn({ method: "GET" })
   .middleware([vaaniGate])
   .handler(async ({ context }) => {
@@ -124,7 +176,7 @@ export const loadProfile = createServerFn({ method: "GET" })
     return {
       ...row,
       is_vendor: row.is_vendor === true || row.is_vendor === "t" || row.is_vendor === "true" || row.is_vendor === 1,
-      language: row.language || "hi-IN",
+      language: row.language || "en-IN",
     };
   });
 
@@ -204,7 +256,7 @@ export const loadAccount = createServerFn({ method: "POST" })
           richest.vendor_id || newInbox,
           richest.industry,
           asFlag(richest.is_vendor) ? "true" : "false",
-          richest.language || "hi-IN",
+          richest.language || "en-IN",
         ],
       );
       await sql.query(`update vaani_tickets set user_id = $1 where user_id = $2`, [context.userId, richest.user_id]);
@@ -234,7 +286,7 @@ export const loadAccount = createServerFn({ method: "POST" })
           vendor_id: row.vendor_id,
           industry: row.industry,
           is_vendor: asFlag(row.is_vendor),
-          language: row.language || "hi-IN",
+          language: row.language || "en-IN",
         }
       : null;
 
@@ -305,7 +357,7 @@ export const saveProfile = createServerFn({ method: "POST" })
     const vendorId = data.isVendor ? inboxIdForUser(context.userId) : (data.vendorId ?? "");
     const industry = data.industry ?? "";
     const flag = data.isVendor ? "true" : "false";
-    const language = data.language || "hi-IN";
+    const language = data.language || "en-IN";
     try {
       await sql.query(
         `insert into vaani_profiles (user_id, shop_name, phone, role, vendor_id, industry, is_vendor, language)
@@ -331,7 +383,7 @@ export const saveLanguage = createServerFn({ method: "POST" })
   .middleware([vaaniGate])
   .validator((input: { language: string }) => input)
   .handler(async ({ context, data }) => {
-    const language = data.language.trim() || "hi-IN";
+    const language = data.language.trim() || "en-IN";
     const sql = await getSql();
     await ensureVaaniSchema(sql);
     await sql.query(
@@ -373,7 +425,7 @@ export const rememberLoginPhone = createServerFn({ method: "POST" })
     const isVendor = match
       ? match.is_vendor === true || match.is_vendor === "t" || match.is_vendor === "true" || match.is_vendor === 1
       : false;
-    const language = match?.language || "hi-IN";
+    const language = match?.language || "en-IN";
     const vendorId = match?.vendor_id || (isVendor ? inboxIdForUser(context.userId) : "");
     await sql.query(
       `insert into vaani_profiles (user_id, shop_name, phone, role, vendor_id, industry, is_vendor, language)

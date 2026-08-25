@@ -10,7 +10,6 @@ import {
   type DateFilter,
 } from "@/components/order-date-filter";
 import { ShopCard } from "@/components/shop-card";
-import { phoneDigits } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
 import { readShopIdentity, useVaani, isOwnCustomerOrder } from "@/lib/vaani/store";
 
@@ -41,7 +40,7 @@ export function VendorHome() {
           </p>
           <p className="mt-2 max-w-prose text-sm text-muted">{t("vendorIdentified")}</p>
         </div>
-        <ShopCard key={phoneDigits(customerPhone) || "shop"} />
+        <ShopCard />
       </div>
 
       {!shopName || !shopIndustry || !listed ? (

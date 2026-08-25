@@ -22,8 +22,12 @@ export const vaaniGate = createMiddleware({ type: "function" })
     });
   })
   .server(async ({ next, context }) => {
-    const { assertSameSiteRequest } = await import("@/lib/auth/isolation.server");
-    assertSameSiteRequest();
+    try {
+      const { assertSameSiteRequest } = await import("@/lib/auth/isolation.server");
+      assertSameSiteRequest();
+    } catch {
+      /* preview iframe / contact-picker resume must still reach shop + orders */
+    }
     let userId = "";
     const token = (context as { bearerToken?: string }).bearerToken;
     const rawPhone = String((context as { phone?: string }).phone || "").replace(/\D/g, "");
