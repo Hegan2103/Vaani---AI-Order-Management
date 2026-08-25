@@ -7,6 +7,8 @@ const LAST_TICKET_KEY = "vaani-last-ticket";
 const SHOP_KEY = "vaani-shop-identity-v1";
 const BACKUP_KEY = "vaani-account-backup-v1";
 const LOGIN_PHONE_KEY = "vaani-login-phone";
+const DIR_KEY = "vaani-dir-contacts";
+const DIR_FLAG = "vaani-dir-pulled";
 const LISTED_KEY = "vaani-listed-vendors-v1";
 const LANG_KEY = "vaani-ui-language";
 
@@ -65,6 +67,45 @@ export function loginPhoneKey() {
   return LOGIN_PHONE_KEY;
 }
 
+export function writeDirContacts(rows: Contact[]) {
+  if (typeof window === "undefined") return;
+  const raw = JSON.stringify(rows);
+  try {
+    sessionStorage.setItem(DIR_FLAG, "1");
+    sessionStorage.setItem(DIR_KEY, raw);
+  } catch {
+    /* ignore */
+  }
+  try {
+    localStorage.setItem(DIR_FLAG, "1");
+    localStorage.setItem(DIR_KEY, raw);
+  } catch {
+    /* ignore */
+  }
+  useVaani.setState({ contacts: rows });
+}
+
+export function readDirContacts(): Contact[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const flag = sessionStorage.getItem(DIR_FLAG) || localStorage.getItem(DIR_FLAG);
+    const raw = sessionStorage.getItem(DIR_KEY) || localStorage.getItem(DIR_KEY);
+    if (flag !== "1" && !raw) return null;
+    if (!raw) return [];
+    const rows = JSON.parse(raw) as Contact[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return null;
+  }
+}
+
+export function applyDirContacts() {
+  const rows = readDirContacts();
+  if (rows == null) return false;
+  useVaani.setState({ contacts: rows });
+  return true;
+}
+
 export function rememberLoginTen(phone: string) {
   if (typeof window === "undefined") return;
   const ten = phoneDigits(phone);
@@ -82,16 +123,6 @@ export function rememberLoginTen(phone: string) {
   }
   try {
     document.cookie = `vaani_phone=${ten}; path=/; max-age=2592000; SameSite=Lax`;
-    document.cookie = `vaani_phone=${ten}; path=/; max-age=2592000; SameSite=None; Secure`;
-  } catch {
-    /* ignore */
-  }
-  try {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("v") !== ten) {
-      url.searchParams.set("v", ten);
-      window.history.replaceState(window.history.state, "", `${url.pathname}?${url.searchParams.toString()}${url.hash}`);
-    }
   } catch {
     /* ignore */
   }
@@ -416,13 +447,10 @@ export function vendorById(id: string) {
 export function vendorForPhone(phone: string) {
   const ten = phoneDigits(phone);
   if (ten.length !== 10) return undefined;
-  const seed = VENDORS.find((v) => phonesMatch(v.phone, phone));
+  const seed = VENDORS.find((v) => phonesMatch(v.phone, phone) || (v.altPhones ?? []).some((p) => phonesMatch(p, phone)));
   if (seed) return seed;
   try {
     const s = useVaani.getState();
-    if (phoneDigits(s.customerPhone) === ten || phoneDigits(readLoginTen()) === ten) {
-      return vendorFromListing(ten, s.customerName || `Shop ${ten}`, s.industry);
-    }
     const live = s.liveVendors.find(
       (v) => phonesMatch(v.phone, phone) || (v.altPhones ?? []).some((p) => phonesMatch(p, phone)),
     );
@@ -430,9 +458,44 @@ export function vendorForPhone(phone: string) {
   } catch {
     /* ignore */
   }
-  return listedVendors().find(
+  const listed = listedVendors().find(
     (v) => phonesMatch(v.phone, phone) || (v.altPhones ?? []).some((p) => phonesMatch(p, phone)),
   );
+  if (listed) return listed;
+  try {
+    const shop = readShopIdentity(ten);
+    if (shop?.shopName?.trim() && (phoneDigits(shop.phone) === ten || !shop.phone)) {
+      return vendorFromListing(ten, shop.shopName, shop.industry);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const backup = readAccountBackup(ten);
+    if (backup?.shopName?.trim()) {
+      return vendorFromListing(ten, backup.shopName, backup.industry);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const raw = localStorage.getItem(`${SHOP_KEY}:${ten}`) || sessionStorage.getItem(`${SHOP_KEY}:${ten}`);
+    if (raw) {
+      const p = JSON.parse(raw) as ShopIdentity;
+      if (p.shopName?.trim()) return vendorFromListing(ten, p.shopName, p.industry);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const known = JSON.parse(localStorage.getItem("vaani-known-phones") || "[]") as string[];
+    if (known.some((k) => phoneDigits(k) === ten)) {
+      return vendorFromListing(ten, `Shop ${ten}`, "grocery");
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
 }
 
 export function onVaaniVendor(phone: string, vendorId?: string | null) {
@@ -495,7 +558,7 @@ export const useVaani = create<State>()(
       shopSaved: false,
       claimedVendorId: "",
       liveVendors: [],
-      contacts: DEFAULT_CONTACTS,
+      contacts: [],
       tickets: [],
       incoming: [],
       notices: [],
@@ -567,7 +630,7 @@ export const useVaani = create<State>()(
       setLiveVendors: (liveVendors) =>
         set((s) => ({
           liveVendors,
-          contacts: relink(s.contacts, liveVendors),
+          contacts: readDirContacts() ?? relink(s.contacts, liveVendors),
         })),
       mergeContacts: (extra) =>
         set((s) => {
@@ -681,6 +744,7 @@ export const useVaani = create<State>()(
           tickets: mergeTicketLists(p.tickets ?? [], current.tickets),
           incoming: mergeTicketLists(p.incoming ?? [], current.incoming),
           claimedVendorId: p.claimedVendorId || current.claimedVendorId || "",
+          contacts: readDirContacts() ?? [],
         };
       },
       partialize: (s) => ({
@@ -693,7 +757,6 @@ export const useVaani = create<State>()(
         shopSaved: s.shopSaved || Boolean(s.customerName.trim()),
         claimedVendorId: s.claimedVendorId,
         accountUserId: s.accountUserId,
-        contacts: s.contacts,
         tickets: s.tickets,
         incoming: s.incoming,
         notices: s.notices.slice(0, 20),

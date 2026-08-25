@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { BookUser, Mic, Phone } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StatusPill } from "@/components/status-pill";
 import {
   DEFAULT_DATE_FILTER,
@@ -14,7 +14,7 @@ import { ShopCard } from "@/components/shop-card";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, readLoginTen, rememberLoginTen, restoreLocalAccount, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { listedVendors, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -34,9 +34,16 @@ export function CustomerHome() {
 
   const meTen = phoneDigits(customerPhone) || readLoginTen();
 
+  useEffect(() => {
+    const rows = readDirContacts();
+    if (rows && rows.length) useVaani.setState({ contacts: rows });
+  }, []);
+
   const filtered = useMemo(() => {
-    return contacts.filter((c) => {
-      if (meTen.length === 10 && phoneDigits(c.phone) === meTen) return false;
+    const dir = readDirContacts();
+    const book = dir ?? contacts.filter((c) => c.source === "phone");
+    const rows = dir != null || book.length ? book : contacts;
+    return rows.filter((c) => {
       const v = vendorForPhone(c.phone);
       if (industry !== "all" && v?.industry && v.industry !== industry) return false;
       const hay = `${c.name} ${c.phone}`.toLowerCase();
@@ -48,21 +55,6 @@ export function CustomerHome() {
     const ten = readLoginTen() || phoneDigits(customerPhone);
     if (ten.length === 10) rememberLoginTen(ten);
     keepSession();
-    try {
-      const res = await fetch("/api/vaani/vendors");
-      const rows = res.ok ? ((await res.json()) as unknown) : [];
-      const remote = Array.isArray(rows) ? rows : [];
-      const local = listedVendors().filter((v) => phoneDigits(v.phone) !== ten);
-      const byTen = new Map<string, (typeof local)[number]>();
-      for (const v of [...local, ...remote]) {
-        const n = phoneDigits(v.phone);
-        if (n.length === 10 && n !== ten) byTen.set(n, v);
-      }
-      useVaani.getState().setLiveVendors([...byTen.values()]);
-    } catch {
-      const local = listedVendors().filter((v) => phoneDigits(v.phone) !== ten);
-      if (local.length) useVaani.getState().setLiveVendors(local);
-    }
     const nav = navigator as Navigator & {
       contacts?: {
         select: (
@@ -72,67 +64,66 @@ export function CustomerHome() {
       };
     };
     try {
-      if (nav.contacts?.select) {
-        keepSession();
-        if (ten.length === 10) rememberLoginTen(ten);
-        const picked = await nav.contacts.select(["name", "tel"], { multiple: true });
-        keepSession();
-        restoreLocalAccount(ten);
-        if (ten.length === 10) rememberLoginTen(ten);
-        const extra: Contact[] = [];
-        for (const p of picked) {
-          const raw = p.tel?.[0];
+      if (!nav.contacts?.select) {
+        setImportMsg(t("pullDirectory"));
+        return;
+      }
+      const picked = await nav.contacts.select(["name", "tel"], { multiple: true });
+      keepSession();
+      restoreLocalAccount(ten);
+      if (ten.length === 10) rememberLoginTen(ten);
+      const extra: Contact[] = [];
+      const seen = new Set<string>();
+      for (const p of picked) {
+        const tels = Array.isArray(p.tel) ? p.tel : p.tel ? [p.tel] : [];
+        const bookName = Array.isArray(p.name)
+          ? p.name.map(String).filter((n) => n.trim()).join(" ")
+          : typeof p.name === "string"
+            ? p.name
+            : "";
+        let added = false;
+        for (const raw of tels) {
           const phone =
             typeof raw === "string"
               ? raw
-              : raw && typeof raw === "object" && raw !== null && "value" in raw
-                ? String((raw as { value: string }).value)
-                : "";
-          if (!phone) continue;
-          if (ten.length === 10 && phoneDigits(phone) === ten) continue;
-          const bookName = Array.isArray(p.name) ? p.name.find((n) => n?.trim()) || phone : phone;
+              : raw && typeof raw === "object"
+                ? String(
+                    (raw as { value?: string; tel?: string; number?: string }).value ||
+                      (raw as { tel?: string }).tel ||
+                      (raw as { number?: string }).number ||
+                      "",
+                  )
+                : String(raw ?? "");
+          const digits = phoneDigits(phone);
+          if (digits.length !== 10) continue;
+          if (seen.has(digits)) continue;
+          seen.add(digits);
           extra.push({
             id: crypto.randomUUID(),
-            name: bookName,
+            name: bookName.trim() || phone,
             phone,
             vendorId: vendorForPhone(phone)?.id ?? null,
             source: "phone",
           });
+          added = true;
         }
-        mergeContacts(extra);
-        setImportMsg(t("importedN", { n: extra.length }));
-        return;
+        if (!added && bookName.trim()) {
+          extra.push({
+            id: crypto.randomUUID(),
+            name: bookName.trim(),
+            phone: tels.map(String).join(" ") || bookName,
+            vendorId: null,
+            source: "phone",
+          });
+        }
       }
+      if (extra.length) writeDirContacts(extra);
+      setImportMsg(t("importedN", { n: extra.length }));
     } catch {
       keepSession();
       restoreLocalAccount(ten);
       if (ten.length === 10) rememberLoginTen(ten);
     }
-    const extras: Contact[] = [
-      {
-        id: crypto.randomUUID(),
-        name: "Mama Medical Store",
-        phone: "+91 98110 11221",
-        vendorId: "v-mehta",
-        source: "phone",
-      },
-      {
-        id: crypto.randomUUID(),
-        name: "Local Kirana (Suresh)",
-        phone: "+91 98765 44321",
-        vendorId: "v-gupta",
-        source: "phone",
-      },
-      {
-        id: crypto.randomUUID(),
-        name: "Site Cement Wala",
-        phone: "+91 90909 33445",
-        vendorId: "v-patel",
-        source: "phone",
-      },
-    ];
-    mergeContacts(extras.filter((c) => phoneDigits(c.phone) !== ten));
-    setImportMsg(t("loadedVendors"));
   }
 
   return (
@@ -192,7 +183,10 @@ export function CustomerHome() {
       </div>
 
       <ul className="divide-y divide-line rounded-[var(--radius-xl)] border border-line bg-surface">
-        {filtered.map((c) => {
+        {filtered.length === 0 ? (
+          <li className="px-4 py-8 text-center text-sm text-muted">{t("pullDirectory")}</li>
+        ) : (
+          filtered.map((c) => {
           const ten = phoneDigits(c.phone);
           const v = ten.length === 10 && ten !== meTen ? vendorForPhone(c.phone) : undefined;
           return (
@@ -225,7 +219,8 @@ export function CustomerHome() {
               )}
             </li>
           );
-        })}
+        })
+        )}
       </ul>
 
       <p className="mt-4 text-xs text-subtle">

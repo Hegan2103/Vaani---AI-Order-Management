@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { readShopIdentity, useVaani } from "@/lib/vaani/store";
+import { readLoginTen, readShopIdentity, useVaani } from "@/lib/vaani/store";
 import type { Industry } from "@/lib/vaani/types";
 
 export function ShopCard({ extra }: { extra?: ReactNode }) {
@@ -16,7 +16,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const setLanguage = useVaani((s) => s.setLanguage);
   const { t, industry: tradeLabel } = useT();
 
-  const snap = readShopIdentity(customerPhone);
+  const snap = readShopIdentity(customerPhone || readLoginTen());
   const savedName = snap?.shopName || customerName;
   const savedPhone = formatInPhone(snap?.phone || customerPhone);
   const savedIndustry = snap?.industry || industry;
@@ -74,11 +74,6 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     editClicked.current = false;
     setEditing(false);
     setShopMsg(t("shopSaved"));
-    void fetch("/api/vaani/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(identity),
-    }).catch(() => undefined);
   }
 
   return (

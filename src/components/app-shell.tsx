@@ -18,6 +18,7 @@ import {
   readUiLanguage,
   rememberLoginTen,
   restoreLocalAccount,
+  applyDirContacts,
   readShopIdentity,
   tenFromEmail,
   useVaani,
@@ -82,20 +83,19 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   }, [customerPhone, customerName, snapPhone, snapName, loginTen]);
 
   useLayoutEffect(() => {
+    useVaani.getState().setHydrated(true);
     const ten = readLoginTen() || phoneDigits(seedPhone || "") || phoneDigits(useVaani.getState().customerPhone);
     if (ten.length === 10) {
       rememberLoginTen(ten);
       restoreLocalAccount(ten);
-      const bar = document.getElementById("vaani-cred-bar");
-      if (bar && useVaani.getState().customerName.trim() && phoneDigits(useVaani.getState().customerPhone).length === 10) {
-        bar.style.display = "none";
-      }
+      applyDirContacts();
     }
     void Promise.resolve(useVaani.persist.rehydrate()).then(() => {
-      const s = useVaani.getState();
-      s.setHydrated(true);
-      const n = readLoginTen() || phoneDigits(s.customerPhone);
+      useVaani.getState().setHydrated(true);
+      const n = readLoginTen() || phoneDigits(useVaani.getState().customerPhone);
       restoreLocalAccount(n);
+      applyDirContacts();
+      const s = useVaani.getState();
       if (s.language) writeUiLanguage(s.language);
       if (s.customerName.trim() || s.tickets.length || s.incoming.length) {
         s.setAccountReady(true);
