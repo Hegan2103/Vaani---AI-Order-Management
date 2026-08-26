@@ -31,10 +31,6 @@ import type { Industry, Ticket } from "@/lib/vaani/types";
 
 export function AppShell({ children, seedPhone }: { children: ReactNode; seedPhone?: string }) {
   const seedTen = phoneDigits(seedPhone || "") || (typeof window !== "undefined" ? liveLoginTen() || readLoginTen() : "");
-  if (seedTen.length === 10 && phoneDigits(useVaani.getState().customerPhone) !== seedTen) {
-    useVaani.setState({ customerPhone: formatInPhone(seedTen) });
-    if (typeof window !== "undefined") restoreLocalAccount(seedTen);
-  }
   const role = useVaani((s) => s.role);
   const setRole = useVaani((s) => s.setRole);
   const setShopIdentity = useVaani((s) => s.setShopIdentity);
@@ -76,12 +72,20 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   const restoredFor = useRef("");
 
   useLayoutEffect(() => {
-    const hasChip =
-      phoneDigits(customerPhone || snapPhone || loginTen).length === 10 &&
-      Boolean((customerName || snapName).trim());
     const bar = document.getElementById("vaani-cred-bar");
-    if (hasChip && bar) bar.style.display = "none";
-  }, [customerPhone, customerName, snapPhone, snapName, loginTen]);
+    if (bar) {
+      bar.textContent = "";
+      bar.style.display = "none";
+    }
+    const ten = liveLoginTen() || readLoginTen() || phoneDigits(seedPhone || "") || phoneDigits(useVaani.getState().customerPhone);
+    if (ten.length === 10) {
+      rememberLoginTen(ten);
+      restoreLocalAccount(ten);
+      applyDirContacts();
+    }
+    useVaani.getState().setHydrated(true);
+    useVaani.getState().setAccountReady(true);
+  }, [seedPhone]);
 
   useEffect(() => {
     const dump = () => {
@@ -98,91 +102,13 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       writeAccountBackup();
     };
     window.addEventListener("pagehide", dump);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") dump();
-    });
-    return () => {
-      window.removeEventListener("pagehide", dump);
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    useVaani.getState().setHydrated(true);
-    const ten = liveLoginTen() || readLoginTen() || phoneDigits(seedPhone || "") || phoneDigits(useVaani.getState().customerPhone);
-    if (ten.length === 10) {
-      rememberLoginTen(ten);
-      restoreLocalAccount(ten);
-      applyDirContacts();
-    }
-    void Promise.resolve(useVaani.persist.rehydrate()).then(() => {
-      useVaani.getState().setHydrated(true);
-      const n = readLoginTen() || phoneDigits(useVaani.getState().customerPhone);
-      restoreLocalAccount(n);
-      applyDirContacts();
-      const s = useVaani.getState();
-      if (s.language) writeUiLanguage(s.language);
-      if (s.customerName.trim() || s.tickets.length || s.incoming.length) {
-        s.setAccountReady(true);
-        writeAccountBackup();
-      }
-    });
-  }, [seedPhone]);
-
-  useEffect(() => {
-    const ten = tenFromEmail(userEmail) || phoneDigits(userName) || readLoginTen();
-    if (ten.length !== 10) return;
-    rememberLoginTen(ten);
-    restoreLocalAccount(ten);
-    const formatted = formatInPhone(ten);
-    const s = useVaani.getState();
-    if (phoneDigits(s.customerPhone) !== ten) {
-      useVaani.setState({ customerPhone: formatted });
-      const snap = readShopIdentity(ten);
-      if (snap) writeShopIdentity({ ...snap, phone: formatted });
-    }
-  }, [userId, userEmail, userName]);
-
-  useEffect(() => {
     const arm = () => unlockBeep();
     window.addEventListener("pointerdown", arm);
-    window.addEventListener("keydown", arm);
     return () => {
+      window.removeEventListener("pagehide", dump);
       window.removeEventListener("pointerdown", arm);
-      window.removeEventListener("keydown", arm);
     };
   }, []);
-
-  useEffect(() => {
-    const ten = tenFromEmail(userEmail) || readLoginTen();
-    if (ten.length === 10) restoreLocalAccount(ten);
-    if (isPending || !hydrated) return;
-    const restoreKey = `${userId || "local"}:${ten || "pending"}`;
-    const alreadyFetched = (() => {
-      try {
-        return localStorage.getItem("vaani-restored") === restoreKey;
-      } catch {
-        return restoredFor.current === restoreKey;
-      }
-    })();
-    restoredFor.current = restoreKey;
-    const backup = readAccountBackup(ten, userId);
-    if (backup?.shopName?.trim()) {
-      setShopIdentity({
-        shopName: backup.shopName,
-        phone: backup.phone || formatInPhone(ten),
-        industry: backup.industry,
-        isVendor: backup.isVendor,
-        language: readUiLanguage() || language || backup.language || "en-IN",
-      });
-    }
-    if (backup?.tickets?.length) replaceTickets(backup.tickets);
-    if (backup?.incoming?.length) replaceIncoming(backup.incoming);
-    if (backup?.claimedVendorId) setClaimedVendor(backup.claimedVendorId);
-    if (backup?.shopName?.trim() || backup?.tickets?.length || backup?.incoming?.length) {
-      setAccountReady(true);
-    }
-    setAccountReady(true);
-  }, [isPending, userId, userEmail, hydrated]);
 
   useEffect(() => {
     if (pathname === "/vendor") setRole("vendor");
@@ -198,7 +124,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   return (
     <div className="min-h-dvh bg-bg text-ink">
       <header className="no-print sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="flex items-baseline gap-2">
             <span className="font-display text-xl tracking-tight">Vaani</span>
             <span className="hidden text-xs text-muted sm:inline">{t("voiceOrders")}</span>
@@ -250,10 +176,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
               ))}
             </select>
             <NoticeBell />
-            <SignedInPhone
-              phone={customerPhone || snapPhone || readLoginTen()}
-              shop={customerName || snapName}
-            />
+            <SignedInPhone phone={customerPhone || snapPhone || readLoginTen()} />
             <AccountBar />
           </div>
         </div>
@@ -344,18 +267,15 @@ function NoticeBell() {
   );
 }
 
-function SignedInPhone({ phone, shop }: { phone: string; shop: string }) {
+function SignedInPhone({ phone }: { phone: string }) {
   const { t } = useT();
   const ten = phoneDigits(phone);
   if (ten.length !== 10) {
-    return <span className="max-w-[9rem] truncate text-xs text-muted">{shop || t("signedIn")}</span>;
+    return <span className="text-xs text-muted">{t("signedIn")}</span>;
   }
   return (
-    <span className="inline-flex max-w-[14rem] items-center">
-      <span className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs">
-        {shop ? <span className="mr-1.5 text-muted">{shop}</span> : null}
-        <span className="font-medium">{formatInPhone(ten)}</span>
-      </span>
+    <span className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-medium">
+      {formatInPhone(ten)}
     </span>
   );
 }

@@ -6,7 +6,7 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "Vaani";
-const CRED_SCRIPT = `(function(){try{if(sessionStorage.getItem("vaani-signed-out")==="1"){var b=document.getElementById("vaani-cred-bar");if(b){b.textContent="";b.style.display="none"}document.documentElement.removeAttribute("data-vaani-phone");document.documentElement.removeAttribute("data-vaani-shop");return}var q="";try{q=new URLSearchParams(location.search).get("v")||""}catch(e){}var c="";try{c=(document.cookie.match(/(?:^|; )vaani_phone=(\\d{10})/)||[])[1]||""}catch(e){}var ls="";try{ls=localStorage.getItem("vaani-login-phone")||sessionStorage.getItem("vaani-login-phone")||""}catch(e){}var d=String(q||c||ls).replace(/\\D/g,"").slice(-10);if(d.length!==10){var el0=document.getElementById("vaani-cred-bar");if(el0){el0.textContent="";el0.style.display="none"}return}var shop="";try{var m=document.cookie.match(/(?:^|; )vaani_shop=([^;]*)/);if(m&&m[1])shop=decodeURIComponent(m[1])}catch(e){}try{var raw=localStorage.getItem("vaani-shop-identity-v1:"+d)||localStorage.getItem("vaani-shop-identity-v1")||"";if(raw){var p=JSON.parse(raw);if(p&&p.shopName)shop=String(p.shopName)}}catch(e){}var t="+91 "+d.slice(0,5)+" "+d.slice(5);var el=document.getElementById("vaani-cred-bar");if(el){el.textContent=shop?shop+" · "+t:t;el.style.display="block"}document.documentElement.setAttribute("data-vaani-phone",d);if(shop)document.documentElement.setAttribute("data-vaani-shop",shop)}catch(e){}})();`;
+const CRED_SCRIPT = `(function(){try{var b=document.getElementById("vaani-cred-bar");if(b){b.textContent="";b.style.display="none"}if(sessionStorage.getItem("vaani-signed-out")==="1"){document.documentElement.removeAttribute("data-vaani-phone");document.documentElement.removeAttribute("data-vaani-shop");return}var q="";try{q=new URLSearchParams(location.search).get("v")||""}catch(e){}var c="";try{c=(document.cookie.match(/(?:^|; )vaani_phone=(\\d{10})/)||[])[1]||""}catch(e){}var ls="";try{ls=localStorage.getItem("vaani-login-phone")||sessionStorage.getItem("vaani-login-phone")||""}catch(e){}var d=String(q||c||ls).replace(/\\D/g,"").slice(-10);if(d.length===10)document.documentElement.setAttribute("data-vaani-phone",d);var shop="";try{var m=document.cookie.match(/(?:^|; )vaani_shop=([^;]*)/);if(m&&m[1])shop=decodeURIComponent(m[1])}catch(e){}if(shop)document.documentElement.setAttribute("data-vaani-shop",shop)}catch(e){}})();`;
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -73,7 +73,7 @@ function RootComponent() {
         <div
           id="vaani-cred-bar"
           suppressHydrationWarning
-          className="border-b border-line bg-bg px-4 py-2 text-center text-sm font-medium text-ink"
+          className="hidden border-b border-line bg-bg px-4 py-2 text-center text-sm font-medium text-ink"
           style={{ display: "none" }}
         />
         <script dangerouslySetInnerHTML={{ __html: CRED_SCRIPT }} />

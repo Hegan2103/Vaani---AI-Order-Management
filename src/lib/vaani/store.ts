@@ -357,28 +357,9 @@ function writeShopCookies(p: ShopIdentity) {
   } catch {
     /* ignore */
   }
-  queueProfileSave(p);
 }
 
-export function queueProfileSave(p: ShopIdentity) {
-  if (typeof window === "undefined") return;
-  const ten = phoneDigits(p.phone);
-  if (ten.length !== 10 || !p.shopName.trim()) return;
-  const ac = new AbortController();
-  window.setTimeout(() => ac.abort(), 2000);
-  void fetch("/api/vaani/profile", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      shopName: p.shopName.trim(),
-      phone: formatInPhone(ten),
-      industry: p.industry || "",
-      isVendor: p.isVendor,
-      language: p.language || "en-IN",
-    }),
-    signal: ac.signal,
-  }).catch(() => undefined);
-}
+export function queueProfileSave(_p: ShopIdentity) {}
 
 function readShopCookies(): ShopIdentity | null {
   if (typeof document === "undefined") return null;
@@ -414,6 +395,7 @@ function readShopCookies(): ShopIdentity | null {
 
 export function writeShopIdentity(p: ShopIdentity) {
   if (typeof window === "undefined") return;
+  if (!p.shopName?.trim()) return;
   try {
     const raw = JSON.stringify(p);
     sessionStorage.setItem(SHOP_KEY, raw);
@@ -755,29 +737,32 @@ export const useVaani = create<State>()(
           };
         }),
       setShopIdentity: (p) => {
-        const shopName = p.shopName.trim();
-        const phone = p.phone.trim();
-        const language = p.language || readUiLanguage() || "en-IN";
         const s = useVaani.getState();
+        const shopName = p.shopName.trim() || s.customerName;
+        const phone = p.phone.trim() || s.customerPhone;
+        const language = p.language || s.language || readUiLanguage() || "en-IN";
+        const industry = p.industry || s.industry || "";
+        const isVendor = Boolean(p.isVendor || s.isVendor);
         if (
           s.customerName === shopName &&
           s.customerPhone === phone &&
-          s.industry === p.industry &&
-          s.isVendor === p.isVendor &&
+          s.industry === industry &&
+          s.isVendor === isVendor &&
           s.language === language &&
           s.shopSaved === (shopName.length > 0)
         ) {
           return;
         }
-        writeShopIdentity({ ...p, language });
-        if (p.isVendor) rememberListedVendor({ shopName, phone, industry: p.industry });
+        if (!shopName) return;
+        writeShopIdentity({ shopName, phone, industry, isVendor, language });
+        if (isVendor) rememberListedVendor({ shopName, phone, industry });
         set({
           customerName: shopName,
           customerPhone: phone,
-          industry: p.industry,
-          isVendor: p.isVendor,
+          industry,
+          isVendor,
           language,
-          shopSaved: shopName.length > 0,
+          shopSaved: true,
         });
         queueMicrotask(() => writeAccountBackup());
       },
@@ -785,14 +770,16 @@ export const useVaani = create<State>()(
         set((s) => {
           const next = language || s.language || readUiLanguage() || "en-IN";
           writeUiLanguage(next);
-          writeShopIdentity({
-            shopName: s.customerName,
-            phone: s.customerPhone,
-            industry: s.industry,
-            isVendor: s.isVendor,
-            language: next,
-          });
-          queueMicrotask(() => writeAccountBackup());
+          if (s.customerName.trim()) {
+            writeShopIdentity({
+              shopName: s.customerName,
+              phone: s.customerPhone,
+              industry: s.industry,
+              isVendor: s.isVendor,
+              language: next,
+            });
+            queueMicrotask(() => writeAccountBackup());
+          }
           return { language: next };
         }),
       setClaimedVendor: (claimedVendorId) => set({ claimedVendorId }),
@@ -903,19 +890,20 @@ export const useVaani = create<State>()(
         const phone = (current.customerPhone || p.customerPhone || disk?.phone || "").trim();
         return {
           ...current,
-          ...p,
+          role: p.role || current.role,
           customerName: name,
           customerPhone: phone,
-          industry: p.industry || current.industry || "",
-          isVendor: Boolean(p.isVendor || current.isVendor),
-          language: p.language || current.language || readUiLanguage() || "en-IN",
-          shopSaved: Boolean(p.shopSaved || current.shopSaved || name),
-          accountUserId: p.accountUserId || current.accountUserId || "",
-          accountReady: Boolean(name || p.tickets?.length || p.incoming?.length || current.shopSaved),
+          industry: current.industry || p.industry || disk?.industry || "",
+          isVendor: Boolean(current.isVendor || p.isVendor || disk?.isVendor),
+          language: current.language || p.language || disk?.language || readUiLanguage() || "en-IN",
+          shopSaved: Boolean(current.shopSaved || p.shopSaved || name),
+          accountUserId: current.accountUserId || p.accountUserId || "",
+          accountReady: Boolean(name || current.shopSaved || p.tickets?.length || current.tickets?.length),
           tickets: mergeTicketLists(p.tickets ?? [], current.tickets),
           incoming: mergeTicketLists(p.incoming ?? [], current.incoming),
-          claimedVendorId: p.claimedVendorId || current.claimedVendorId || "",
-          contacts: readDirContacts() ?? [],
+          claimedVendorId: current.claimedVendorId || p.claimedVendorId || "",
+          contacts: readDirContacts() ?? current.contacts,
+          notices: current.notices?.length ? current.notices : p.notices ?? [],
         };
       },
       partialize: (s) => ({

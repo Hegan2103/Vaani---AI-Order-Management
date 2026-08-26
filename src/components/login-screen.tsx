@@ -185,42 +185,22 @@ export function LoginGate({ children, startOn }: { children: ReactNode; startOn?
     } catch {
       /* ignore */
     }
-    if (hasActiveSession() && ten.length === 10) {
-      stickyEntered = true;
-      setOn(true);
-    } else {
+    if (isSignedOut()) {
       setOn(false);
       const bar = document.getElementById("vaani-cred-bar");
       if (bar) bar.style.display = "none";
+    } else if ((hasActiveSession() && ten.length === 10) || startOn) {
+      stickyEntered = true;
+      setOn(true);
     }
-    const sync = () => {
-      if (!hasActiveSession()) {
-        setOn(false);
-        return;
-      }
-      const n = liveLoginTen() || readLoginTen();
-      if (n.length === 10) {
-        try {
-          restoreLocalAccount(n);
-        } catch {
-          /* ignore */
-        }
-        setOn(true);
-        return;
-      }
-      setOn(false);
+    const sync = (ev?: Event) => {
+      if (ev?.type === "vaani-auth" && isSignedOut()) setOn(false);
     };
     window.addEventListener("vaani-auth", sync);
-    window.addEventListener("pageshow", sync);
-    window.addEventListener("focus", sync);
-    document.addEventListener("visibilitychange", sync);
     return () => {
       window.removeEventListener("vaani-auth", sync);
-      window.removeEventListener("pageshow", sync);
-      window.removeEventListener("focus", sync);
-      document.removeEventListener("visibilitychange", sync);
     };
-  }, []);
+  }, [startOn]);
 
   if (!on) {
     return (

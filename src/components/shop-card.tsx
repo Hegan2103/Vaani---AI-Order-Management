@@ -1,85 +1,105 @@
 import { Pencil } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { liveLoginTen, readLoginTen, readShopIdentity, restoreLocalAccount, useVaani } from "@/lib/vaani/store";
+import { liveLoginTen, readLoginTen, readShopIdentity, useVaani, type ShopIdentity } from "@/lib/vaani/store";
 import type { Industry } from "@/lib/vaani/types";
 
-export function ShopCard({ extra }: { extra?: ReactNode }) {
-  const customerName = useVaani((s) => s.customerName);
-  const customerPhone = useVaani((s) => s.customerPhone);
-  const industry = useVaani((s) => s.industry);
-  const isVendor = useVaani((s) => s.isVendor);
-  const language = useVaani((s) => s.language);
-  const setShopIdentity = useVaani((s) => s.setShopIdentity);
-  const setLanguage = useVaani((s) => s.setLanguage);
-  const { t, industry: tradeLabel } = useT();
+const PIN_KEY = "vaani-shop-locked";
+let LOCKED: ShopIdentity | null = null;
+let EDITING = false;
 
-  const snap = readShopIdentity(customerPhone || liveLoginTen() || readLoginTen());
-  const loginTen = phoneDigits(customerPhone) || liveLoginTen() || readLoginTen() || phoneDigits(snap?.phone || "");
-  const savedName = (snap?.shopName || customerName || "").trim();
-  const savedPhone = formatInPhone(snap?.phone || customerPhone || loginTen);
-  const savedIndustry = snap?.industry || industry;
-  const savedVendor = snap?.isVendor ?? isVendor;
-  const savedLang = snap?.language || language || "en-IN";
-  const hasSaved = Boolean(savedName);
+function remember(p: Partial<ShopIdentity> | null | undefined) {
+  const shopName = (p?.shopName || LOCKED?.shopName || "").trim();
+  if (!shopName) return LOCKED;
+  LOCKED = {
+    shopName,
+    phone: p?.phone || LOCKED?.phone || "",
+    industry: p?.industry || LOCKED?.industry || "",
+    isVendor: Boolean(p?.isVendor || LOCKED?.isVendor),
+    language: p?.language || LOCKED?.language || "en-IN",
+  };
+  try {
+    sessionStorage.setItem(PIN_KEY, JSON.stringify(LOCKED));
+    localStorage.setItem(PIN_KEY, JSON.stringify(LOCKED));
+  } catch {
+    /* ignore */
+  }
+  return LOCKED;
+}
+
+function pullIdentity() {
+  if (typeof window === "undefined") return LOCKED;
+  try {
+    const raw = sessionStorage.getItem(PIN_KEY) || localStorage.getItem(PIN_KEY) || "";
+    if (raw) remember(JSON.parse(raw) as ShopIdentity);
+  } catch {
+    /* ignore */
+  }
+  remember(readShopIdentity(liveLoginTen() || readLoginTen()));
+  const s = useVaani.getState();
+  remember({
+    shopName: s.customerName,
+    phone: s.customerPhone,
+    industry: s.industry,
+    isVendor: s.isVendor,
+    language: s.language,
+  });
+  return LOCKED;
+}
+
+export function ShopCard({ extra }: { extra?: ReactNode }) {
+  const setShopIdentity = useVaani((s) => s.setShopIdentity);
+  const { t, industry: tradeLabel } = useT();
+  const [editing, setEditing] = useState(EDITING);
+  const [id, setId] = useState<ShopIdentity | null>(LOCKED);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [shopDraft, setShopDraft] = useState(LOCKED?.shopName || "");
+  const [industryDraft, setIndustryDraft] = useState<Industry | "">(LOCKED?.industry || "");
+  const [sellDraft, setSellDraft] = useState(Boolean(LOCKED?.isVendor));
+  const [langDraft, setLangDraft] = useState(LOCKED?.language || "en-IN");
+  const [shopMsg, setShopMsg] = useState<string | null>(null);
 
   useLayoutEffect(() => {
-    const ten = liveLoginTen() || readLoginTen();
-    if (ten.length !== 10) return;
-    restoreLocalAccount(ten);
-    if (savedName) return;
-    const ac = new AbortController();
-    const timer = window.setTimeout(() => ac.abort(), 2000);
-    void fetch(`/api/vaani/profile?phone=${ten}`, { signal: ac.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((row: { shopName?: string; phone?: string; industry?: Industry | ""; isVendor?: boolean; language?: string } | null) => {
-        if (!row?.shopName?.trim()) return;
-        setShopIdentity({
-          shopName: row.shopName.trim(),
-          phone: row.phone || formatInPhone(ten),
-          industry: row.industry || "",
-          isVendor: Boolean(row.isVendor),
-          language: row.language || "en-IN",
-        });
-      })
-      .catch(() => undefined);
-    return () => {
-      window.clearTimeout(timer);
-      ac.abort();
-    };
-  }, [savedName, setShopIdentity]);
+    const next = pullIdentity();
+    if (next) {
+      setId(next);
+      if (!EDITING) {
+        setShopDraft(next.shopName);
+        setIndustryDraft(next.industry || "");
+        setSellDraft(Boolean(next.isVendor));
+        setLangDraft(next.language || "en-IN");
+      }
+    }
+  }, []);
 
-  const nameRef = useRef<HTMLInputElement>(null);
-  const [editing, setEditing] = useState(false);
-  const [shopDraft, setShopDraft] = useState(savedName);
-  const [phoneDraft, setPhoneDraft] = useState(savedPhone);
-  const [industryDraft, setIndustryDraft] = useState<Industry | "">(savedIndustry);
-  const [sellDraft, setSellDraft] = useState(savedVendor);
-  const [langDraft, setLangDraft] = useState(savedLang);
-  const [shopMsg, setShopMsg] = useState<string | null>(null);
-  const editClicked = useRef(false);
+  const shown = id || LOCKED;
+  const loginTen = liveLoginTen() || readLoginTen() || phoneDigits(shown?.phone || "");
+  const savedName = (shown?.shopName || "").trim();
+  const savedPhone = formatInPhone(shown?.phone || loginTen);
+  const savedIndustry = shown?.industry || "";
+  const savedVendor = Boolean(shown?.isVendor);
+  const savedLang = shown?.language || "en-IN";
+  const locked = Boolean(savedName) && !editing;
 
-  useEffect(() => {
-    if (hasSaved && !editClicked.current) setEditing(false);
-  }, [hasSaved]);
-
-  useEffect(() => {
-    if (loginTen.length !== 10) return;
-    setPhoneDraft((prev) => (phoneDigits(prev) === loginTen ? prev : formatInPhone(loginTen)));
-  }, [loginTen]);
-
-  useEffect(() => {
-    if (!hasSaved || editing) return;
+  function startEdit(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
     setShopDraft(savedName);
-    setPhoneDraft(savedPhone);
     setIndustryDraft(savedIndustry);
     setSellDraft(savedVendor);
     setLangDraft(savedLang);
-  }, [hasSaved, editing, savedName, savedPhone, savedIndustry, savedVendor, savedLang]);
+    EDITING = true;
+    setEditing(true);
+    setShopMsg(null);
+  }
 
-  const locked = hasSaved && !editing;
+  function stopEdit() {
+    EDITING = false;
+    setEditing(false);
+    setShopMsg(null);
+  }
 
   function saveShop() {
     const shopName = (nameRef.current?.value || shopDraft).trim();
@@ -88,51 +108,35 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
       nameRef.current?.focus();
       return;
     }
-    const identity = {
+    const identity: ShopIdentity = {
       shopName,
-      phone: loginTen.length === 10 ? formatInPhone(loginTen) : phoneDraft.trim(),
+      phone: loginTen.length === 10 ? formatInPhone(loginTen) : savedPhone,
       industry: industryDraft,
       isVendor: sellDraft,
       language: langDraft || "en-IN",
     };
-    setShopDraft(shopName);
+    remember(identity);
+    setId(identity);
     setShopIdentity(identity);
-    editClicked.current = false;
+    EDITING = false;
     setEditing(false);
     setShopMsg(t("shopSaved"));
-    const ac = new AbortController();
-    window.setTimeout(() => ac.abort(), 2000);
-    void fetch("/api/vaani/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(identity),
-      signal: ac.signal,
-    }).catch(() => undefined);
   }
 
   return (
-    <div className="rounded-[var(--radius-xl)] border border-line bg-surface p-5">
+    <div className="rounded-[var(--radius-xl)] border border-line bg-surface p-5" suppressHydrationWarning>
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("yourShop")}</p>
         {locked ? (
-          <Button
+          <button
             type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setShopDraft(savedName);
-              setPhoneDraft(savedPhone);
-              setIndustryDraft(savedIndustry);
-              setSellDraft(savedVendor);
-              setLangDraft(savedLang);
-              editClicked.current = true;
-              setEditing(true);
-              setShopMsg(null);
-            }}
+            className="inline-flex h-8 items-center gap-1 rounded-full border border-line bg-surface px-3 text-sm"
+            onClick={startEdit}
+            onPointerDown={(e) => e.stopPropagation()}
           >
             <Pencil className="size-3.5" />
             {t("edit")}
-          </Button>
+          </button>
         ) : null}
       </div>
 
@@ -145,11 +149,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             {savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`}
             {` · ${LANGUAGES.find((l) => l.id === savedLang)?.label ?? savedLang}`}
           </p>
-          {shopMsg ? (
-            <p className={`mt-2 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>
-              {shopMsg}
-            </p>
-          ) : null}
+          {shopMsg ? <p className="mt-2 text-sm text-ok">{shopMsg}</p> : null}
         </div>
       ) : (
         <div className="mt-3">
@@ -166,11 +166,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
           <label className="mt-3 block text-xs text-muted">{t("loggedMobile")}</label>
           <input
             readOnly
-            value={loginTen.length === 10 ? formatInPhone(loginTen) : phoneDraft}
-            onChange={(e) => {
-              setPhoneDraft(e.target.value);
-              setShopMsg(null);
-            }}
+            value={loginTen.length === 10 ? formatInPhone(loginTen) : savedPhone}
             className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm text-muted"
           />
           <label className="mt-3 block text-xs text-muted">{t("yourTrade")}</label>
@@ -189,10 +185,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
           <label className="mt-3 block text-xs text-muted">{t("language")}</label>
           <select
             value={langDraft}
-            onChange={(e) => {
-              setLangDraft(e.target.value);
-              setLanguage(e.target.value);
-            }}
+            onChange={(e) => setLangDraft(e.target.value)}
             className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
           >
             {LANGUAGES.map((l) => (
@@ -202,38 +195,18 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             ))}
           </select>
           <label className="mt-3 flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={sellDraft}
-              onChange={(e) => setSellDraft(e.target.checked)}
-            />
+            <input type="checkbox" className="mt-1" checked={sellDraft} onChange={(e) => setSellDraft(e.target.checked)} />
             <span>{t("sellOnVaani")}</span>
           </label>
           {shopMsg ? (
-            <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>
-              {shopMsg}
-            </p>
+            <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>{shopMsg}</p>
           ) : null}
           <div className="mt-4 flex gap-2">
             <Button type="button" className="flex-1" onClick={saveShop}>
               {t("saveShop")}
             </Button>
-            {hasSaved ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShopDraft(savedName);
-                  setPhoneDraft(savedPhone);
-                  setIndustryDraft(savedIndustry);
-                  setSellDraft(savedVendor);
-                  setLangDraft(savedLang);
-                  editClicked.current = false;
-                  setEditing(false);
-                  setShopMsg(null);
-                }}
-              >
+            {savedName ? (
+              <Button type="button" variant="outline" onClick={stopEdit}>
                 {t("cancel")}
               </Button>
             ) : null}

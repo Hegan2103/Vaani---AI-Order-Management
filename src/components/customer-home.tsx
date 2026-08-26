@@ -128,27 +128,7 @@ export function CustomerHome() {
 
   return (
     <>
-      <section className="mb-8 grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted">{t("forEveryShop")}</p>
-          <h1 className="mt-2 font-display text-4xl leading-tight tracking-tight md:text-5xl">
-            {t("speakOrder")}
-            <br />
-            {t("skipCall")}
-          </h1>
-          <p className="mt-3 max-w-prose text-sm text-muted">
-            {customerPhone ? t("signedInAs", { phone: formatInPhone(customerPhone) }) : null}
-          </p>
-          <ol className="mt-3 max-w-prose list-decimal space-y-1.5 pl-5 text-sm text-muted">
-            <li>{t("step1")}</li>
-            <li>{t("step2")}</li>
-            <li>
-              {t("step3a")} <span className="text-ink">{t("step3qty")}</span> {t("step3b")}{" "}
-              <span className="text-ink">{t("step3cost")}</span> {t("step3c")}
-            </li>
-            <li>{t("step4")}</li>
-          </ol>
-        </div>
+      <section className="mb-8">
         <ShopCard
           extra={
             <Button className="mt-4 w-full" variant="outline" onClick={() => void pullDirectory()}>
@@ -157,6 +137,17 @@ export function CustomerHome() {
             </Button>
           }
         />
+        <div className="mt-6">
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted">{t("forEveryShop")}</p>
+          <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight">
+            {t("speakOrder")}
+            <br />
+            {t("skipCall")}
+          </h1>
+          <p className="mt-3 max-w-prose text-sm text-muted">
+            {customerPhone ? t("signedInAs", { phone: formatInPhone(customerPhone) }) : null}
+          </p>
+        </div>
       </section>
 
       {importMsg ? <p className="mb-3 text-sm text-ok">{importMsg}</p> : null}
