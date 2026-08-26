@@ -14,6 +14,7 @@ import { isRtl, useT } from "@/lib/vaani/i18n";
 import {
   mergeTicketLists,
   readAccountBackup,
+  liveLoginTen,
   readLoginTen,
   readUiLanguage,
   rememberLoginTen,
@@ -29,7 +30,7 @@ import {
 import type { Industry, Ticket } from "@/lib/vaani/types";
 
 export function AppShell({ children, seedPhone }: { children: ReactNode; seedPhone?: string }) {
-  const seedTen = phoneDigits(seedPhone || "") || (typeof window !== "undefined" ? readLoginTen() : "");
+  const seedTen = phoneDigits(seedPhone || "") || (typeof window !== "undefined" ? liveLoginTen() || readLoginTen() : "");
   if (seedTen.length === 10 && phoneDigits(useVaani.getState().customerPhone) !== seedTen) {
     useVaani.setState({ customerPhone: formatInPhone(seedTen) });
     if (typeof window !== "undefined") restoreLocalAccount(seedTen);
@@ -82,9 +83,32 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     if (hasChip && bar) bar.style.display = "none";
   }, [customerPhone, customerName, snapPhone, snapName, loginTen]);
 
+  useEffect(() => {
+    const dump = () => {
+      const s = useVaani.getState();
+      if (s.customerName.trim()) {
+        s.setShopIdentity({
+          shopName: s.customerName,
+          phone: s.customerPhone,
+          industry: s.industry,
+          isVendor: s.isVendor,
+          language: s.language || "en-IN",
+        });
+      }
+      writeAccountBackup();
+    };
+    window.addEventListener("pagehide", dump);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") dump();
+    });
+    return () => {
+      window.removeEventListener("pagehide", dump);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     useVaani.getState().setHydrated(true);
-    const ten = readLoginTen() || phoneDigits(seedPhone || "") || phoneDigits(useVaani.getState().customerPhone);
+    const ten = liveLoginTen() || readLoginTen() || phoneDigits(seedPhone || "") || phoneDigits(useVaani.getState().customerPhone);
     if (ten.length === 10) {
       rememberLoginTen(ten);
       restoreLocalAccount(ten);

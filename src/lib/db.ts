@@ -204,7 +204,6 @@ async function createSql(): Promise<Sql> {
     );
   }
   const sql = dbSource === "neon" ? await createNeonSql() : await createPgliteSql();
-  await wipeUserDataOnce(sql);
   return sql;
 }
 

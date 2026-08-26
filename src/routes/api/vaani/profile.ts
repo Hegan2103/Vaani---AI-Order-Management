@@ -5,6 +5,36 @@ import { inboxIdForUser, phoneDigits } from "@/lib/vaani/seed";
 export const Route = createFileRoute("/api/vaani/profile")({
   server: {
     handlers: {
+      GET: async ({ request }) => {
+        try {
+          const url = new URL(request.url);
+          const ten = phoneDigits(url.searchParams.get("phone") || "");
+          if (ten.length !== 10) return Response.json(null);
+          const sql = await getSql();
+          const rows = await sql.query<{
+            shop_name: string;
+            phone: string;
+            industry: string;
+            is_vendor: boolean | string | number;
+            language: string;
+          }>(
+            `select shop_name, phone, industry, is_vendor, language from vaani_profiles
+             where user_id = $1 or phone like $2 limit 1`,
+            [`phone:${ten}`, `%${ten}%`],
+          );
+          const row = rows[0];
+          if (!row?.shop_name) return Response.json(null);
+          return Response.json({
+            shopName: row.shop_name,
+            phone: row.phone || `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`,
+            industry: row.industry || "",
+            isVendor: row.is_vendor === true || row.is_vendor === "t" || row.is_vendor === "true" || row.is_vendor === 1,
+            language: row.language || "en-IN",
+          });
+        } catch {
+          return Response.json(null);
+        }
+      },
       POST: async ({ request }) => {
         try {
           const body = (await request.json()) as {

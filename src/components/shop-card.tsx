@@ -1,9 +1,9 @@
 import { Pencil } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { readLoginTen, readShopIdentity, useVaani } from "@/lib/vaani/store";
+import { liveLoginTen, readLoginTen, readShopIdentity, restoreLocalAccount, useVaani } from "@/lib/vaani/store";
 import type { Industry } from "@/lib/vaani/types";
 
 export function ShopCard({ extra }: { extra?: ReactNode }) {
@@ -16,14 +16,40 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const setLanguage = useVaani((s) => s.setLanguage);
   const { t, industry: tradeLabel } = useT();
 
-  const snap = readShopIdentity(customerPhone || readLoginTen());
-  const savedName = snap?.shopName || customerName;
-  const savedPhone = formatInPhone(snap?.phone || customerPhone);
+  const snap = readShopIdentity(customerPhone || liveLoginTen() || readLoginTen());
+  const loginTen = phoneDigits(customerPhone) || liveLoginTen() || readLoginTen() || phoneDigits(snap?.phone || "");
+  const savedName = (snap?.shopName || customerName || "").trim();
+  const savedPhone = formatInPhone(snap?.phone || customerPhone || loginTen);
   const savedIndustry = snap?.industry || industry;
   const savedVendor = snap?.isVendor ?? isVendor;
   const savedLang = snap?.language || language || "en-IN";
-  const hasSaved = Boolean(savedName.trim());
-  const loginTen = phoneDigits(savedPhone);
+  const hasSaved = Boolean(savedName);
+
+  useLayoutEffect(() => {
+    const ten = liveLoginTen() || readLoginTen();
+    if (ten.length !== 10) return;
+    restoreLocalAccount(ten);
+    if (savedName) return;
+    const ac = new AbortController();
+    const timer = window.setTimeout(() => ac.abort(), 2000);
+    void fetch(`/api/vaani/profile?phone=${ten}`, { signal: ac.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((row: { shopName?: string; phone?: string; industry?: Industry | ""; isVendor?: boolean; language?: string } | null) => {
+        if (!row?.shopName?.trim()) return;
+        setShopIdentity({
+          shopName: row.shopName.trim(),
+          phone: row.phone || formatInPhone(ten),
+          industry: row.industry || "",
+          isVendor: Boolean(row.isVendor),
+          language: row.language || "en-IN",
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      window.clearTimeout(timer);
+      ac.abort();
+    };
+  }, [savedName, setShopIdentity]);
 
   const nameRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
@@ -74,6 +100,14 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     editClicked.current = false;
     setEditing(false);
     setShopMsg(t("shopSaved"));
+    const ac = new AbortController();
+    window.setTimeout(() => ac.abort(), 2000);
+    void fetch("/api/vaani/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(identity),
+      signal: ac.signal,
+    }).catch(() => undefined);
   }
 
   return (

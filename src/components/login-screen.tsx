@@ -2,6 +2,7 @@ import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode
 import { Button } from "@/components/ui/button";
 import { GROK_PROVIDERS, signIn, storeBearerToken } from "@/lib/auth/client";
 import {
+  liveLoginTen,
   loginPhoneKey,
   readLoginTen,
   readUiLanguage,
@@ -16,6 +17,7 @@ import { isRtl, t as tr, useT } from "@/lib/vaani/i18n";
 const ENTERED_KEY = "vaani-entered";
 const TYPING_KEY = "vaani-typing-phone";
 let stickyEntered = false;
+let signedOutLock = false;
 let typed = "";
 
 function toTen(raw: string) {
@@ -52,6 +54,12 @@ function readEntered() {
 
 function markEntered() {
   stickyEntered = true;
+  signedOutLock = false;
+  try {
+    sessionStorage.removeItem("vaani-signed-out");
+  } catch {
+    /* ignore */
+  }
   try {
     localStorage.setItem(ENTERED_KEY, "1");
     sessionStorage.setItem(ENTERED_KEY, "1");
@@ -66,7 +74,17 @@ function markEntered() {
   window.dispatchEvent(new Event("vaani-auth"));
 }
 
+function isSignedOut() {
+  if (signedOutLock) return true;
+  try {
+    return sessionStorage.getItem("vaani-signed-out") === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function keepSession() {
+  if (isSignedOut()) return;
   if (readLoginTen().length === 10) markEntered();
 }
 export function setOtpLock(_on: boolean) {}
@@ -77,6 +95,7 @@ export function markSessionOk(on: boolean) {
 
 export function resetLoginGate() {
   stickyEntered = false;
+  signedOutLock = true;
   typed = "";
   try {
     const phoneKey = loginPhoneKey();
@@ -87,6 +106,7 @@ export function resetLoginGate() {
     sessionStorage.removeItem(phoneKey);
     localStorage.removeItem(TYPING_KEY);
     sessionStorage.removeItem(TYPING_KEY);
+    sessionStorage.setItem("vaani-signed-out", "1");
   } catch {
     /* ignore */
   }
@@ -110,6 +130,7 @@ export function resetLoginGate() {
       bar.style.display = "none";
     }
     document.documentElement.removeAttribute("data-vaani-phone");
+    document.documentElement.removeAttribute("data-vaani-shop");
   } catch {
     /* ignore */
   }
@@ -135,8 +156,21 @@ class ShellGuard extends Component<{ children: ReactNode }, { message: string }>
   }
 }
 
+function hasActiveSession() {
+  if (isSignedOut()) return false;
+  if (stickyEntered) return true;
+  try {
+    return sessionStorage.getItem(ENTERED_KEY) === "1" || localStorage.getItem(ENTERED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function LoginGate({ children, startOn }: { children: ReactNode; startOn?: boolean }) {
-  const [on, setOn] = useState(Boolean(startOn));
+  const [on, setOn] = useState(() => {
+    if (typeof window !== "undefined" && isSignedOut()) return false;
+    return Boolean(startOn);
+  });
 
   useLayoutEffect(() => {
     const lang = useVaani.getState().language || readUiLanguage();
@@ -145,23 +179,36 @@ export function LoginGate({ children, startOn }: { children: ReactNode; startOn?
       document.documentElement.dir = isRtl(lang) ? "rtl" : "ltr";
       if (useVaani.getState().language !== lang) useVaani.getState().setLanguage(lang);
     }
-    const ten = readLoginTen();
-    const entered = Boolean(startOn) || stickyEntered || ten.length === 10;
-    if (entered) {
+    const ten = hasActiveSession() ? liveLoginTen() || readLoginTen() : "";
+    try {
+      if (ten.length === 10) restoreLocalAccount(ten);
+    } catch {
+      /* ignore */
+    }
+    if (hasActiveSession() && ten.length === 10) {
       stickyEntered = true;
-      restoreLocalAccount(ten);
       setOn(true);
     } else {
       setOn(false);
+      const bar = document.getElementById("vaani-cred-bar");
+      if (bar) bar.style.display = "none";
     }
-    const sync = (ev?: Event) => {
-      if (stickyEntered || readLoginTen().length === 10) {
-        stickyEntered = true;
-        restoreLocalAccount(readLoginTen());
+    const sync = () => {
+      if (!hasActiveSession()) {
+        setOn(false);
+        return;
+      }
+      const n = liveLoginTen() || readLoginTen();
+      if (n.length === 10) {
+        try {
+          restoreLocalAccount(n);
+        } catch {
+          /* ignore */
+        }
         setOn(true);
         return;
       }
-      if (ev?.type === "vaani-auth") setOn(false);
+      setOn(false);
     };
     window.addEventListener("vaani-auth", sync);
     window.addEventListener("pageshow", sync);
@@ -173,7 +220,7 @@ export function LoginGate({ children, startOn }: { children: ReactNode; startOn?
       window.removeEventListener("focus", sync);
       document.removeEventListener("visibilitychange", sync);
     };
-  }, [startOn]);
+  }, []);
 
   if (!on) {
     return (
@@ -202,6 +249,16 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   const setLanguage = useVaani((s) => s.setLanguage);
   const { t } = useT();
 
+  useLayoutEffect(() => {
+    const bar = document.getElementById("vaani-cred-bar");
+    if (bar) {
+      bar.textContent = "";
+      bar.style.display = "none";
+    }
+    document.documentElement.removeAttribute("data-vaani-phone");
+    document.documentElement.removeAttribute("data-vaani-shop");
+  }, []);
+
   function livePhone() {
     return toTen(phoneRef.current?.value || phone);
   }
@@ -219,16 +276,27 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
 
   useEffect(() => {
     if (step !== "phone") return;
+    const pull = () => {
+      const el = phoneRef.current;
+      if (!el) return;
+      const ten = toTen(el.value);
+      if (el.value !== ten) el.value = ten;
+      setPhone((prev) => (prev === ten ? prev : ten));
+      persistTyping(ten);
+    };
+    pull();
     const el = phoneRef.current;
-    if (!el) return;
-    const sync = () => setDigits(el.value);
-    el.addEventListener("input", sync);
-    el.addEventListener("keyup", sync);
-    el.addEventListener("change", sync);
+    el?.addEventListener("input", pull);
+    el?.addEventListener("keyup", pull);
+    el?.addEventListener("change", pull);
+    el?.addEventListener("paste", pull);
+    const id = window.setInterval(pull, 100);
     return () => {
-      el.removeEventListener("input", sync);
-      el.removeEventListener("keyup", sync);
-      el.removeEventListener("change", sync);
+      window.clearInterval(id);
+      el?.removeEventListener("input", pull);
+      el?.removeEventListener("keyup", pull);
+      el?.removeEventListener("change", pull);
+      el?.removeEventListener("paste", pull);
     };
   }, [step]);
 
@@ -346,6 +414,9 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                   maxLength={10}
                   defaultValue=""
                   placeholder="9876543210"
+                  onInput={(e) => setDigits((e.target as HTMLInputElement).value)}
+                  onChange={(e) => setDigits(e.target.value)}
+                  onKeyUp={(e) => setDigits((e.target as HTMLInputElement).value)}
                   className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
                 />
               </div>
@@ -354,7 +425,8 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               </p>
               <button
                 type="button"
-                className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+                disabled={phone.length !== 10}
+                className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg disabled:opacity-40"
                 onClick={requestCode}
               >
                 {t("sendCode")}

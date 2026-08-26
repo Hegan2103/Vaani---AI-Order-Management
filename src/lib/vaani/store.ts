@@ -130,25 +130,73 @@ export function rememberLoginTen(phone: string) {
 
 export function readLoginTen() {
   if (typeof window === "undefined") return "";
+  const tryTen = (raw: string) => {
+    const t = phoneDigits(String(raw || ""));
+    return t.length === 10 ? t : "";
+  };
   try {
-    const q = phoneDigits(new URLSearchParams(window.location.search).get("v") || "");
-    if (q.length === 10) return q;
+    const q = tryTen(new URLSearchParams(window.location.search).get("v") || "");
+    if (q) return q;
   } catch {
     /* ignore */
   }
   try {
-    const stored = sessionStorage.getItem(LOGIN_PHONE_KEY) || localStorage.getItem(LOGIN_PHONE_KEY) || "";
-    const ten = phoneDigits(stored);
-    if (ten.length === 10) return ten;
+    const t = tryTen(sessionStorage.getItem(LOGIN_PHONE_KEY) || localStorage.getItem(LOGIN_PHONE_KEY) || "");
+    if (t) return t;
   } catch {
     /* ignore */
   }
   try {
     const m = document.cookie.match(/(?:^|; )vaani_phone=(\d{10})(?:;|$)/);
-    return m?.[1] ?? "";
+    if (m?.[1]) return m[1];
   } catch {
-    return "";
+    /* ignore */
   }
+  try {
+    const raw = localStorage.getItem(SHOP_KEY) || sessionStorage.getItem(SHOP_KEY) || "";
+    const t = tryTen(JSON.parse(raw || "{}").phone || "");
+    if (t) return t;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const store = JSON.parse(localStorage.getItem("vaani-store-v3") || "{}") as { state?: { customerPhone?: string } };
+    const t = tryTen(store?.state?.customerPhone || "");
+    if (t) return t;
+  } catch {
+    /* ignore */
+  }
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i) || "";
+      if (!key.startsWith(`${SHOP_KEY}:`)) continue;
+      const t = tryTen(key.slice(SHOP_KEY.length + 1));
+      if (t) return t;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const known = JSON.parse(localStorage.getItem("vaani-known-phones") || "[]") as string[];
+    for (let i = known.length - 1; i >= 0; i -= 1) {
+      const t = tryTen(known[i]);
+      if (t) return t;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
+export function liveLoginTen() {
+  if (typeof window === "undefined") return "";
+  try {
+    const attr = phoneDigits(document.documentElement.getAttribute("data-vaani-phone") || "");
+    if (attr.length === 10) return attr;
+  } catch {
+    /* ignore */
+  }
+  return readLoginTen();
 }
 
 export function tenFromEmail(email?: string | null) {
@@ -224,22 +272,141 @@ export function readAccountBackup(ten?: string, userId?: string): AccountBackup 
   }
 }
 
+export function readPersistedShop(): ShopIdentity | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const store = JSON.parse(localStorage.getItem("vaani-store-v3") || "{}") as {
+      state?: { customerName?: string; customerPhone?: string; industry?: string; isVendor?: boolean; language?: string };
+    };
+    const s = store.state ?? {};
+    if (!String(s.customerName || "").trim()) return null;
+    return {
+      shopName: String(s.customerName).trim(),
+      phone: String(s.customerPhone || ""),
+      industry: (s.industry as ShopIdentity["industry"]) || "",
+      isVendor: Boolean(s.isVendor),
+      language: s.language || "en-IN",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function readShopIdentity(phone?: string): ShopIdentity | null {
   if (typeof window === "undefined") return null;
-  const ten = phoneDigits(phone || readLoginTen());
-  const keys = ten.length === 10 ? [`${SHOP_KEY}:${ten}`, SHOP_KEY] : [SHOP_KEY];
-  try {
-    for (const key of keys) {
-      const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
-      if (!raw) continue;
-      const p = JSON.parse(raw) as ShopIdentity;
-      if (!p.shopName?.trim()) continue;
-      if (ten.length === 10 && p.phone && phoneDigits(p.phone).length === 10 && phoneDigits(p.phone) !== ten) {
-        continue;
-      }
-      return p;
+  const ten = phoneDigits(phone || liveLoginTen() || readLoginTen());
+  const pick = (p: ShopIdentity | null | undefined, requireTen: boolean) => {
+    if (!p?.shopName?.trim()) return null;
+    if (requireTen && ten.length === 10 && p.phone && phoneDigits(p.phone).length === 10 && phoneDigits(p.phone) !== ten) {
+      return null;
     }
+    return p;
+  };
+  try {
+    if (ten.length === 10) {
+      const keyed = localStorage.getItem(`${SHOP_KEY}:${ten}`) || sessionStorage.getItem(`${SHOP_KEY}:${ten}`);
+      if (keyed) {
+        const p = pick(JSON.parse(keyed) as ShopIdentity, false);
+        if (p) return p;
+      }
+    }
+    const generic = localStorage.getItem(SHOP_KEY) || sessionStorage.getItem(SHOP_KEY);
+    if (generic) {
+      const p = pick(JSON.parse(generic) as ShopIdentity, ten.length === 10);
+      if (p) return p;
+      const loose = JSON.parse(generic) as ShopIdentity;
+      if (loose.shopName?.trim()) return { ...loose, phone: ten.length === 10 ? formatInPhone(ten) : loose.phone };
+    }
+    const persisted = readPersistedShop();
+    if (persisted && (!ten || !persisted.phone || phoneDigits(persisted.phone) === ten || phoneDigits(persisted.phone).length !== 10)) {
+      return ten.length === 10 ? { ...persisted, phone: formatInPhone(ten) } : persisted;
+    }
+    const backup = readAccountBackup(ten);
+    if (backup?.shopName?.trim()) {
+      return {
+        shopName: backup.shopName,
+        phone: backup.phone || formatInPhone(ten),
+        industry: backup.industry,
+        isVendor: backup.isVendor,
+        language: backup.language || "en-IN",
+      };
+    }
+    return readShopCookies() || persisted;
+  } catch {
     return null;
+  }
+}
+
+function writeShopCookies(p: ShopIdentity) {
+  if (typeof document === "undefined") return;
+  const max = "path=/; max-age=2592000; SameSite=Lax";
+  try {
+    document.cookie = `vaani_shop=${encodeURIComponent(p.shopName.trim())}; ${max}`;
+    document.cookie = `vaani_industry=${encodeURIComponent(p.industry || "")}; ${max}`;
+    document.cookie = `vaani_isvendor=${p.isVendor ? "1" : "0"}; ${max}`;
+    document.cookie = `vaani_lang=${encodeURIComponent(p.language || "en-IN")}; ${max}`;
+    document.cookie = `vaani_id=${encodeURIComponent(
+      JSON.stringify({
+        shopName: p.shopName.trim(),
+        phone: p.phone,
+        industry: p.industry || "",
+        isVendor: p.isVendor,
+        language: p.language || "en-IN",
+      }),
+    )}; ${max}`;
+  } catch {
+    /* ignore */
+  }
+  queueProfileSave(p);
+}
+
+export function queueProfileSave(p: ShopIdentity) {
+  if (typeof window === "undefined") return;
+  const ten = phoneDigits(p.phone);
+  if (ten.length !== 10 || !p.shopName.trim()) return;
+  const ac = new AbortController();
+  window.setTimeout(() => ac.abort(), 2000);
+  void fetch("/api/vaani/profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      shopName: p.shopName.trim(),
+      phone: formatInPhone(ten),
+      industry: p.industry || "",
+      isVendor: p.isVendor,
+      language: p.language || "en-IN",
+    }),
+    signal: ac.signal,
+  }).catch(() => undefined);
+}
+
+function readShopCookies(): ShopIdentity | null {
+  if (typeof document === "undefined") return null;
+  try {
+    const grab = (key: string) => {
+      const m = document.cookie.match(new RegExp(`(?:^|; )${key}=([^;]*)`));
+      return m ? decodeURIComponent(m[1]) : "";
+    };
+    const shopName = grab("vaani_shop").trim();
+    if (!shopName) {
+      const packed = grab("vaani_id");
+      if (packed) {
+        try {
+          const p = JSON.parse(packed) as ShopIdentity;
+          if (p.shopName?.trim()) return { ...p, phone: p.phone || formatInPhone(liveLoginTen() || readLoginTen()) };
+        } catch {
+          /* ignore */
+        }
+      }
+      return null;
+    }
+    return {
+      shopName,
+      phone: formatInPhone(liveLoginTen() || readLoginTen()),
+      industry: (grab("vaani_industry") as ShopIdentity["industry"]) || "",
+      isVendor: grab("vaani_isvendor") === "1",
+      language: grab("vaani_lang") || "en-IN",
+    };
   } catch {
     return null;
   }
@@ -256,6 +423,7 @@ export function writeShopIdentity(p: ShopIdentity) {
       sessionStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
       localStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
     }
+    if (p.shopName.trim()) writeShopCookies(p);
     if (ten.length === 10 && p.shopName.trim()) rememberListedVendor(p);
   } catch {
     /* ignore */
@@ -344,7 +512,7 @@ export function listedVendors(): Vendor[] {
 
 export function restoreLocalAccount(phone?: string) {
   if (typeof window === "undefined") return false;
-  const ten = phoneDigits(phone || readLoginTen());
+  const ten = phoneDigits(phone || liveLoginTen() || readLoginTen());
   const s = useVaani.getState();
   const backup = readAccountBackup(ten, s.accountUserId);
   const shop = readShopIdentity(ten);
@@ -371,6 +539,7 @@ export function restoreLocalAccount(phone?: string) {
   const tickets = mergeTicketLists(mergeTicketLists(s.tickets, backup?.tickets ?? []), extraTickets);
   const incoming = mergeTicketLists(mergeTicketLists(s.incoming, backup?.incoming ?? []), extraIncoming);
   if (ten.length === 10) rememberLoginTen(ten);
+  applyDirContacts();
   if (shopName) {
     s.setShopIdentity({
       shopName,
@@ -379,6 +548,7 @@ export function restoreLocalAccount(phone?: string) {
       isVendor,
       language,
     });
+    writeShopCookies({ shopName, phone: formatted, industry, isVendor, language });
   } else if (ten.length === 10 && phoneDigits(s.customerPhone) !== ten) {
     useVaani.setState({ customerPhone: formatted });
   }
@@ -728,8 +898,9 @@ export const useVaani = create<State>()(
       skipHydration: true,
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<State>;
-        const name = (p.customerName || current.customerName || "").trim();
-        const phone = (p.customerPhone || current.customerPhone || "").trim();
+        const disk = readShopIdentity(p.customerPhone || current.customerPhone);
+        const name = (current.customerName || p.customerName || disk?.shopName || "").trim();
+        const phone = (current.customerPhone || p.customerPhone || disk?.phone || "").trim();
         return {
           ...current,
           ...p,
@@ -764,7 +935,7 @@ export const useVaani = create<State>()(
       storage: createJSONStorage(() => ({
         getItem: (name) => {
           if (typeof window === "undefined") return null;
-          return localStorage.getItem(name);
+          return localStorage.getItem(name) || sessionStorage.getItem(name);
         },
         setItem: (name, value) => {
           if (typeof window === "undefined") return;
