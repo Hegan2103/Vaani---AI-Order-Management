@@ -1,4 +1,4 @@
-import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { GROK_PROVIDERS, signIn, storeBearerToken } from "@/lib/auth/client";
 import {
@@ -125,7 +125,8 @@ export function resetLoginGate() {
     });
   } catch {
     /* ignore */
-  }  try {
+  }
+  try {
     document.cookie = `${ENTERED_KEY}=; path=/; max-age=0`;
     document.cookie = "vaani_phone=; path=/; max-age=0";
   } catch {
@@ -269,49 +270,24 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     setErr(null);
   }
 
-  useEffect(() => {
-    if (step !== "phone") return;
-  const pull = () => {
-      const el = phoneRef.current;
-      if (!el) return;
-      const ten = toTen(el.value);
-      setPhone((prev) => (prev === ten ? prev : ten));
-      persistTyping(ten);
-    };
-    pull();
-    const el = phoneRef.current;
-    el?.addEventListener("input", pull);
-    el?.addEventListener("keyup", pull);
-    el?.addEventListener("change", pull);
-    el?.addEventListener("paste", pull);
-    const id = window.setInterval(pull, 100);
-    return () => {
-      window.clearInterval(id);
-      el?.removeEventListener("input", pull);
-      el?.removeEventListener("keyup", pull);
-      el?.removeEventListener("change", pull);
-      el?.removeEventListener("paste", pull);
-    };
-  }, [step]);
+  function tapDigit(d: string) {
+    setDigits(phone + d);
+  }
 
-  useEffect(() => {
-    if (step !== "otp") return;
-    const el = otpRef.current;
-    if (!el) return;
-    const sync = () => {
-      const code = el.value.replace(/\D/g, "").slice(0, 6);
-      setOtp(code);
-      setErr(null);
-    };
-    el.addEventListener("input", sync);
-    el.addEventListener("keyup", sync);
-    el.addEventListener("change", sync);
-    return () => {
-      el.removeEventListener("input", sync);
-      el.removeEventListener("keyup", sync);
-      el.removeEventListener("change", sync);
-    };
-  }, [step]);
+  function tapDel() {
+    setDigits(phone.slice(0, -1));
+  }
+
+  function tapOtpDigit(d: string) {
+    const code = (otp + d).replace(/\D/g, "").slice(0, 6);
+    setOtp(code);
+    setErr(null);
+  }
+
+  function tapOtpDel() {
+    setOtp((prev) => prev.slice(0, -1));
+    setErr(null);
+  }
 
   function requestCode() {
     const ten = livePhone();
@@ -413,36 +389,52 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 <span className="text-sm text-muted">+91</span>
                 <input
                   ref={phoneRef}
-                  type="tel"
+                  type="text"
                   inputMode="numeric"
-                  autoComplete="tel"
-                  name="mobile"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  enterKeyHint="done"
+                  name="vaani-mobile"
                   maxLength={10}
-                  defaultValue=""
+                  value={phone}
                   placeholder="9876543210"
-                  onInput={(e) => setDigits((e.target as HTMLInputElement).value)}
                   onChange={(e) => setDigits(e.target.value)}
-                  onKeyUp={(e) => setDigits((e.target as HTMLInputElement).value)}
                   className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
                 />
               </div>
               <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
-                {livePhone().length === 10 ? t("digitsReady", { n: livePhone().length }) : t("digitsCount", { n: livePhone().length })}
+                {phone.length === 10 ? t("digitsReady", { n: phone.length }) : t("digitsCount", { n: phone.length })}
               </p>
-             <button
-  type="button"
-  className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
-  onClick={() => {
-    const ten = livePhone();
-    if (ten.length === 10) {
-      requestCode();
-    } else {
-      setErr(t("tapTen"));
-    }
-  }}
->
-  {t("sendCode")}
-</button>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "C"].map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="inline-flex h-12 touch-manipulation items-center justify-center rounded-[var(--radius-md)] border border-line bg-bg text-lg font-medium"
+                    onClick={() => {
+                      if (key === "⌫") tapDel();
+                      else if (key === "C") setDigits("");
+                      else tapDigit(key);
+                    }}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="mt-4 inline-flex h-12 w-full touch-manipulation items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+                onClick={() => {
+                  const ten = livePhone();
+                  if (ten.length === 10) requestCode();
+                  else setErr(t("tapTen"));
+                }}
+              >
+                {t("sendCode")}
+              </button>
             </>
           ) : (
             <>
@@ -457,21 +449,45 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               <p className="mt-5 text-xs text-muted">{t("otpLabel")}</p>
               <input
                 ref={otpRef}
-                type="tel"
+                type="text"
                 inputMode="numeric"
+                pattern="[0-9]*"
                 autoComplete="one-time-code"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 name="otp"
                 maxLength={6}
-                defaultValue=""
+                value={otp}
                 placeholder="______"
+                onChange={(e) => {
+                  setOtp(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  setErr(null);
+                }}
                 className="mt-1 h-12 w-full rounded-[var(--radius-md)] border border-line bg-white px-3 text-center text-xl font-medium tracking-[0.4em] outline-none"
               />
               <p className={`mt-2 text-sm ${otp.length === 6 ? "font-medium text-ink" : "text-muted"}`}>
                 {otp.length === 6 ? t("otpReady", { n: otp.length }) : t("otpCount", { n: otp.length })}
               </p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "C"].map((key) => (
+                  <button
+                    key={`otp-${key}`}
+                    type="button"
+                    className="inline-flex h-12 touch-manipulation items-center justify-center rounded-[var(--radius-md)] border border-line bg-bg text-lg font-medium"
+                    onClick={() => {
+                      if (key === "⌫") tapOtpDel();
+                      else if (key === "C") setOtp("");
+                      else tapOtpDigit(key);
+                    }}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
-                className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+                className="mt-4 inline-flex h-12 w-full touch-manipulation items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
                 onClick={checkCode}
               >
                 {t("verifySignIn")}
