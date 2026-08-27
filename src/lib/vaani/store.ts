@@ -482,22 +482,16 @@ export function restoreLocalAccount(phone?: string) {
       /* ignore */
     }
   }
-  const prevTen = phoneDigits(s.customerPhone);
+const prevTen = phoneDigits(s.customerPhone);
   const sameUser = prevTen.length === 10 && prevTen === ten;
   const shopName = (backup?.shopName || shop?.shopName || (sameUser ? s.customerName : "") || "").trim();
-  const formatted = formatInPhone(backup?.phone || shop?.phone || ten || (sameUser ? s.customerPhone : ""));
-  const industry = backup?.industry || shop?.industry || (sameUser ? s.industry : "") || "";
-  const isVendor = Boolean(backup?.isVendor || shop?.isVendor || (sameUser && s.isVendor));
+  const formatted = formatInPhone(backup?.phone || shop?.phone || ten || s.customerPhone);
+  const industry = backup?.industry || shop?.industry || s.industry || "";
+  const isVendor = Boolean(backup?.isVendor || shop?.isVendor || s.isVendor);
   const language = readUiLanguage() || shop?.language || backup?.language || s.language || "en-IN";
-  const claimed = backup?.claimedVendorId || (sameUser ? s.claimedVendorId : "") || "";
-  const tickets = mergeTicketLists(
-    sameUser ? s.tickets : backup?.tickets ?? [],
-    extraTickets,
-  );
-  const incoming = mergeTicketLists(
-    sameUser ? s.incoming : backup?.incoming ?? [],
-    extraIncoming,
-  );
+  const claimed = backup?.claimedVendorId || s.claimedVendorId || "";
+  const tickets = mergeTicketLists(mergeTicketLists(s.tickets, backup?.tickets ?? []), extraTickets);
+  const incoming = mergeTicketLists(mergeTicketLists(s.incoming, backup?.incoming ?? []), extraIncoming);
   if (ten.length === 10) rememberLoginTen(ten);
   applyDirContacts();
   if (shopName) {
@@ -513,8 +507,8 @@ export function restoreLocalAccount(phone?: string) {
     useVaani.setState({ customerPhone: formatted });
   }
   if (claimed && !s.claimedVendorId) s.setClaimedVendor(claimed);
-  s.replaceTickets(tickets);
-  s.replaceIncoming(incoming);
+  if (tickets.length) s.replaceTickets(tickets);
+  if (incoming.length) s.replaceIncoming(incoming);
   if (shopName || tickets.length || incoming.length) {
     s.setAccountReady(true);
     writeAccountBackup();
@@ -814,8 +808,18 @@ export const useVaani = create<State>()(
         });
         queueMicrotask(() => writeAccountBackup());
       },
-      replaceTickets: (tickets) => set({ tickets }),
-      replaceIncoming: (incoming) => set({ incoming }),
+      replaceTickets: (tickets) =>
+        set((s) => {
+          if (!tickets.length) return s;
+          return { tickets: mergeTicketLists(s.tickets, tickets) };
+        }),
+      replaceIncoming: (incoming) =>
+        set((s) => {
+          const ten = phoneDigits(s.customerPhone);
+          const dropSelf = (list: Ticket[]) =>
+            ten ? list.filter((t) => phoneDigits(t.customerPhone) !== ten) : list;
+          return { incoming: mergeTicketLists(dropSelf(s.incoming), dropSelf(incoming)) };
+        }),
       pushNotices: (events) =>
         set((s) => ({
           notices: [...events, ...s.notices].slice(0, 40),
