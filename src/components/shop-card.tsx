@@ -10,19 +10,22 @@ const PIN_KEY = "vaani-shop-locked";
 let LOCKED: ShopIdentity | null = null;
 let EDITING = false;
 
-function remember(p: Partial<ShopIdentity> | null | undefined) {
-  const shopName = (p?.shopName || LOCKED?.shopName || "").trim();
-  if (!shopName) return LOCKED;
+function remember(p: Partial<ShopIdentity> | null | undefined, ten?: string) {
+  const login = phoneDigits(ten || liveLoginTen() || readLoginTen() || p?.phone || "");
+  const shopName = (p?.shopName || "").trim();
+  if (!shopName || login.length !== 10) return LOCKED;
+  const storedTen = phoneDigits(p?.phone || "");
+  if (storedTen.length === 10 && storedTen !== login) return LOCKED;
   LOCKED = {
     shopName,
-    phone: p?.phone || LOCKED?.phone || "",
-    industry: p?.industry || LOCKED?.industry || "",
-    isVendor: Boolean(p?.isVendor || LOCKED?.isVendor),
-    language: p?.language || LOCKED?.language || "en-IN",
+    phone: formatInPhone(login),
+    industry: p?.industry || "",
+    isVendor: Boolean(p?.isVendor),
+    language: p?.language || "en-IN",
   };
   try {
-    sessionStorage.setItem(PIN_KEY, JSON.stringify(LOCKED));
-    localStorage.setItem(PIN_KEY, JSON.stringify(LOCKED));
+    sessionStorage.setItem(`${PIN_KEY}:${login}`, JSON.stringify(LOCKED));
+    localStorage.setItem(`${PIN_KEY}:${login}`, JSON.stringify(LOCKED));
   } catch {
     /* ignore */
   }
@@ -30,25 +33,35 @@ function remember(p: Partial<ShopIdentity> | null | undefined) {
 }
 
 function pullIdentity() {
-  if (typeof window === "undefined") return LOCKED;
+  if (typeof window === "undefined") return null;
+  const ten = liveLoginTen() || readLoginTen();
+  LOCKED = null;
+  if (ten.length !== 10) return null;
   try {
-    const raw = sessionStorage.getItem(PIN_KEY) || localStorage.getItem(PIN_KEY) || "";
-    if (raw) remember(JSON.parse(raw) as ShopIdentity);
+    const raw =
+      sessionStorage.getItem(`${PIN_KEY}:${ten}`) ||
+      localStorage.getItem(`${PIN_KEY}:${ten}`) ||
+      "";
+    if (raw) remember(JSON.parse(raw) as ShopIdentity, ten);
   } catch {
     /* ignore */
   }
-  remember(readShopIdentity(liveLoginTen() || readLoginTen()));
+  remember(readShopIdentity(ten), ten);
   const s = useVaani.getState();
-  remember({
-    shopName: s.customerName,
-    phone: s.customerPhone,
-    industry: s.industry,
-    isVendor: s.isVendor,
-    language: s.language,
-  });
+  if (phoneDigits(s.customerPhone) === ten && s.customerName.trim()) {
+    remember(
+      {
+        shopName: s.customerName,
+        phone: s.customerPhone,
+        industry: s.industry,
+        isVendor: s.isVendor,
+        language: s.language,
+      },
+      ten,
+    );
+  }
   return LOCKED;
 }
-
 export function ShopCard({ extra }: { extra?: ReactNode }) {
   const setShopIdentity = useVaani((s) => s.setShopIdentity);
   const { t, industry: tradeLabel } = useT();
@@ -75,7 +88,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   }, []);
 
   const shown = id || LOCKED;
-  const loginTen = liveLoginTen() || readLoginTen() || phoneDigits(shown?.phone || "");
+  const loginTen = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone || "");
   const savedName = (shown?.shopName || "").trim();
   const savedPhone = formatInPhone(shown?.phone || loginTen);
   const savedIndustry = shown?.industry || "";

@@ -295,49 +295,19 @@ export function readPersistedShop(): ShopIdentity | null {
 export function readShopIdentity(phone?: string): ShopIdentity | null {
   if (typeof window === "undefined") return null;
   const ten = phoneDigits(phone || liveLoginTen() || readLoginTen());
-  const pick = (p: ShopIdentity | null | undefined, requireTen: boolean) => {
-    if (!p?.shopName?.trim()) return null;
-    if (requireTen && ten.length === 10 && p.phone && phoneDigits(p.phone).length === 10 && phoneDigits(p.phone) !== ten) {
-      return null;
-    }
-    return p;
-  };
+  if (ten.length !== 10) return null;
   try {
-    if (ten.length === 10) {
-      const keyed = localStorage.getItem(`${SHOP_KEY}:${ten}`) || sessionStorage.getItem(`${SHOP_KEY}:${ten}`);
-      if (keyed) {
-        const p = pick(JSON.parse(keyed) as ShopIdentity, false);
-        if (p) return p;
-      }
-    }
-    const generic = localStorage.getItem(SHOP_KEY) || sessionStorage.getItem(SHOP_KEY);
-    if (generic) {
-      const p = pick(JSON.parse(generic) as ShopIdentity, ten.length === 10);
-      if (p) return p;
-      const loose = JSON.parse(generic) as ShopIdentity;
-      if (loose.shopName?.trim()) return { ...loose, phone: ten.length === 10 ? formatInPhone(ten) : loose.phone };
-    }
-    const persisted = readPersistedShop();
-    if (persisted && (!ten || !persisted.phone || phoneDigits(persisted.phone) === ten || phoneDigits(persisted.phone).length !== 10)) {
-      return ten.length === 10 ? { ...persisted, phone: formatInPhone(ten) } : persisted;
-    }
-    const backup = readAccountBackup(ten);
-    if (backup?.shopName?.trim()) {
-      return {
-        shopName: backup.shopName,
-        phone: backup.phone || formatInPhone(ten),
-        industry: backup.industry,
-        isVendor: backup.isVendor,
-        language: backup.language || "en-IN",
-      };
-    }
-    return readShopCookies() || persisted;
+    const keyed = localStorage.getItem(`${SHOP_KEY}:${ten}`) || sessionStorage.getItem(`${SHOP_KEY}:${ten}`);
+    if (!keyed) return null;
+    const p = JSON.parse(keyed) as ShopIdentity;
+    if (!p?.shopName?.trim()) return null;
+    const storedTen = phoneDigits(p.phone);
+    if (storedTen.length === 10 && storedTen !== ten) return null;
+    return { ...p, phone: formatInPhone(ten) };
   } catch {
     return null;
   }
-}
-
-function writeShopCookies(p: ShopIdentity) {
+}function writeShopCookies(p: ShopIdentity) {
   if (typeof document === "undefined") return;
   const max = "path=/; max-age=2592000; SameSite=Lax";
   try {
@@ -512,7 +482,9 @@ export function restoreLocalAccount(phone?: string) {
       /* ignore */
     }
   }
-  const shopName = (backup?.shopName || shop?.shopName || s.customerName || "").trim();
+const prevTen = phoneDigits(s.customerPhone);
+  const sameUser = prevTen.length === 10 && prevTen === ten;
+  const shopName = (backup?.shopName || shop?.shopName || (sameUser ? s.customerName : "") || "").trim();
   const formatted = formatInPhone(backup?.phone || shop?.phone || ten || s.customerPhone);
   const industry = backup?.industry || shop?.industry || s.industry || "";
   const isVendor = Boolean(backup?.isVendor || shop?.isVendor || s.isVendor);

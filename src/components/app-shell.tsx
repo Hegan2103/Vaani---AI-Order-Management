@@ -176,7 +176,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
               ))}
             </select>
             <NoticeBell />
-            <SignedInPhone phone={customerPhone || snapPhone || readLoginTen()} />
+            <SignedInPhone phone={formatInPhone(liveLoginTen() || readLoginTen() || customerPhone)} />
             <AccountBar />
           </div>
         </div>

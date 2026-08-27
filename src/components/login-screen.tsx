@@ -101,16 +101,31 @@ export function resetLoginGate() {
     const phoneKey = loginPhoneKey();
     localStorage.removeItem(ENTERED_KEY);
     sessionStorage.removeItem(ENTERED_KEY);
+    localStorage.removeItem("vaani-store-v3");
+    sessionStorage.removeItem("vaani-store-v3");
     localStorage.removeItem("vaani-restored");
     localStorage.removeItem(phoneKey);
     sessionStorage.removeItem(phoneKey);
     localStorage.removeItem(TYPING_KEY);
     sessionStorage.removeItem(TYPING_KEY);
+    localStorage.removeItem("vaani-shop-locked");
+    sessionStorage.removeItem("vaani-shop-locked");
+    localStorage.removeItem("vaani-shop-identity-v1");
+    sessionStorage.removeItem("vaani-shop-identity-v1");
     sessionStorage.setItem("vaani-signed-out", "1");
   } catch {
     /* ignore */
   }
   try {
+    useVaani.setState({
+      customerName: "",
+      industry: "",
+      isVendor: false,
+      shopSaved: false,
+    });
+  } catch {
+    /* ignore */
+  }  try {
     document.cookie = `${ENTERED_KEY}=; path=/; max-age=0`;
     document.cookie = "vaani_phone=; path=/; max-age=0";
   } catch {
@@ -256,11 +271,10 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
 
   useEffect(() => {
     if (step !== "phone") return;
-    const pull = () => {
+  const pull = () => {
       const el = phoneRef.current;
       if (!el) return;
       const ten = toTen(el.value);
-      if (el.value !== ten) el.value = ten;
       setPhone((prev) => (prev === ten ? prev : ten));
       persistTyping(ten);
     };
@@ -318,10 +332,22 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     setErr(null);
   }
 
-  function finish(ten: string) {
+ function finish(ten: string) {
     rememberLoginTen(ten);
     stickyEntered = true;
-    useVaani.setState({ customerPhone: `+91 ${ten.slice(0, 5)} ${ten.slice(5)}` });
+    const formatted = `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`;
+    const prev = String(useVaani.getState().customerPhone || "").replace(/\D/g, "").slice(-10);
+    if (prev !== ten) {
+      useVaani.setState({
+        customerPhone: formatted,
+        customerName: "",
+        industry: "",
+        isVendor: false,
+        shopSaved: false,
+      });
+    } else {
+      useVaani.setState({ customerPhone: formatted });
+    }
     restoreLocalAccount(ten);
     useVaani.getState().setAccountReady(true);
     markEntered();
@@ -401,16 +427,22 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 />
               </div>
               <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
-                {phone.length === 10 ? t("digitsReady", { n: phone.length }) : t("digitsCount", { n: phone.length })}
+                {livePhone().length === 10 ? t("digitsReady", { n: livePhone().length }) : t("digitsCount", { n: livePhone().length })}
               </p>
-              <button
-                type="button"
-                disabled={phone.length !== 10}
-                className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg disabled:opacity-40"
-                onClick={requestCode}
-              >
-                {t("sendCode")}
-              </button>
+             <button
+  type="button"
+  className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+  onClick={() => {
+    const ten = livePhone();
+    if (ten.length === 10) {
+      requestCode();
+    } else {
+      setErr(t("tapTen"));
+    }
+  }}
+>
+  {t("sendCode")}
+</button>
             </>
           ) : (
             <>

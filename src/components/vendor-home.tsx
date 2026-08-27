@@ -11,7 +11,7 @@ import {
 } from "@/components/order-date-filter";
 import { ShopCard } from "@/components/shop-card";
 import { useT } from "@/lib/vaani/i18n";
-import { readShopIdentity, useVaani, isOwnCustomerOrder } from "@/lib/vaani/store";
+import { readShopIdentity, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
   const incoming = useVaani((s) => s.incoming);
@@ -22,8 +22,9 @@ export function VendorHome() {
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
-  const snap = readShopIdentity(customerPhone);
-  const shopName = snap?.shopName || customerName;
+ const ten = (liveLoginTen?.() || String(customerPhone || "").replace(/\D/g, "").slice(-10));
+  const snap = readShopIdentity(ten);
+  const shopName = snap?.shopName || "";
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
   const inbox = incoming.filter((t) => !isOwnCustomerOrder(t, customerPhone));
