@@ -49,7 +49,7 @@ function parseChunk(chunk: string): LineItem {
 /** Split speech into lines. Keep the spoken product name — never map to a catalog/brand. */
 export function fallbackParse(transcript: string): LineItem[] {
   const chunks = transcript
-    .split(/,| aur | and | तथा | एवं |\n|;| फिर | phir | और /i)
+    .split(/,| aur | and | तथा | एवं |\n|;| फिर | phir | और | plus |\s\/\s/i)
     .map((s) => s.trim())
     .filter(Boolean);
   const lines = chunks.map(parseChunk);
