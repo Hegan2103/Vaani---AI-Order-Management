@@ -10,6 +10,8 @@ import {
   type DateFilter,
 } from "@/components/order-date-filter";
 import { ShopCard } from "@/components/shop-card";
+import { listIncomingTickets } from "@/lib/vaani/account";
+import { inboxIdForUser } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
 import { mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
@@ -31,8 +33,17 @@ export function VendorHome() {
 
   useEffect(() => {
     if (ten.length !== 10) return;
-    const rows = mergeTicketLists(readVendorInbox(ten), readAccountBackup(ten)?.incoming ?? []);
-    if (rows.length) useVaani.setState({ incoming: rows });
+    const local = mergeTicketLists(readVendorInbox(ten), readAccountBackup(ten)?.incoming ?? []);
+    if (local.length) useVaani.setState({ incoming: local });
+    const vendorId = inboxIdForUser(`vaani-${ten}`);
+    void listIncomingTickets({ data: { vendorId } })
+      .then((rows) => {
+        if (!Array.isArray(rows) || !rows.length) return;
+        useVaani.setState({ incoming: mergeTicketLists(useVaani.getState().incoming, rows) });
+      })
+      .catch(() => {
+        /* local inbox still used */
+      });
   }, [ten]);
 
   return (

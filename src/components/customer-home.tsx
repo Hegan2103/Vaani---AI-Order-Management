@@ -219,7 +219,9 @@ export function CustomerHome() {
                   {v ? ` · ${tradeLabel(v.industry)}` : ""}
                 </p>
               </div>
-              {v ? (
+              {ten === meTen ? (
+                <span className="text-xs text-subtle">{t("yourShop")}</span>
+              ) : v ? (
                 <Button
                   type="button"
                   size="sm"
@@ -280,12 +282,13 @@ export function CustomerHome() {
         </div>
       )}
 
-      {tickets.length > 0 ? (
+      {tickets.filter((row) => phoneDigits(row.customerPhone) === meTen || !row.customerPhone).length > 0 ? (
         <section className="mt-10">
           <h2 className="mb-3 font-display text-2xl tracking-tight">{t("yourRequests")}</h2>
           <OrderDateFilter value={dateFilter} onChange={setDateFilter} />
           {(() => {
-            const rows = filterByDate(tickets, dateFilter);
+            const mine = tickets.filter((row) => !meTen || phoneDigits(row.customerPhone) === meTen);
+            const rows = filterByDate(mine, dateFilter);
             if (rows.length === 0) {
               return <p className="text-sm text-muted">{t("noOrdersDates")}</p>;
             }
