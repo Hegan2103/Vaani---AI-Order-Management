@@ -8,7 +8,7 @@ import { parseVoiceOrder } from "@/lib/vaani/ai";
 import { fallbackParse } from "@/lib/vaani/match";
 import { LANGUAGES, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { findOpenTicket, liveLoginTen, pushIncomingToVendor, readLoginTen, useVaani, vendorById } from "@/lib/vaani/store";
+import { findOpenTicket, liveLoginTen, pushIncomingToVendor, readLoginTen, shopNameForTen, useVaani, vendorById } from "@/lib/vaani/store";
 import type { LineItem, Ticket } from "@/lib/vaani/types";
 
 export const Route = createFileRoute("/call/$vendorId")({ component: CallRoute });
@@ -211,13 +211,18 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       return;
     }
     const orderPhone = formatInPhone(loginTen || customerPhone);
+    const vendorShop =
+      shopNameForTen(vendorTen, vendor.shop) === (customerName || "").trim() && vendorTen !== loginTen
+        ? `Shop ${vendorTen}`
+        : shopNameForTen(vendorTen, vendor.shop);
+    const vendorPhone = formatInPhone(vendorTen || vendor.phone);
     const open = findOpenTicket(vendor.id);
     if (open) {
       const next: Ticket = {
         ...open,
         vendorId: vendor.id,
-        vendorShop: vendor.shop,
-        vendorPhone: vendor.phone,
+        vendorShop,
+        vendorPhone,
         transcript: [open.transcript, transcript].filter(Boolean).join("\n"),
         lines: [...open.lines, ...lines],
         status: open.lines.some((l) => l.status !== "pending") ? "reviewing" : "sent",
@@ -225,7 +230,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
         updatedAt: new Date().toISOString(),
       };
       upsertTicket(next);
-      pushIncomingToVendor(vendor.phone || vendorTen, vendor.id, next);
+      pushIncomingToVendor(vendorPhone || vendorTen, vendor.id, next);
       setCallVendorId("");
       try {
         await saveTicket({ data: { ticket: next } });
@@ -238,8 +243,8 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
     const ticket: Ticket = {
       id: crypto.randomUUID(),
       vendorId: vendor.id,
-      vendorShop: vendor.shop,
-      vendorPhone: vendor.phone,
+      vendorShop,
+      vendorPhone,
       customerName: customerName || "Shop",
       customerPhone: orderPhone,
       language: language || "en-IN",
@@ -252,7 +257,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       updatedAt: new Date().toISOString(),
     };
     upsertTicket(ticket);
-    pushIncomingToVendor(vendor.phone || vendorTen, vendor.id, ticket);
+    pushIncomingToVendor(vendorPhone || vendorTen, vendor.id, ticket);
     setCallVendorId("");
     try {
       await saveTicket({ data: { ticket } });

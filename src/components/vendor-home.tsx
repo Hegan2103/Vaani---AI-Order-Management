@@ -11,7 +11,7 @@ import {
 } from "@/components/order-date-filter";
 import { ShopCard } from "@/components/shop-card";
 import { useT } from "@/lib/vaani/i18n";
-import { readAccountBackup, readShopIdentity, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
+import { readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
   const incoming = useVaani((s) => s.incoming);
@@ -22,17 +22,17 @@ export function VendorHome() {
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
- const ten = (liveLoginTen?.() || String(customerPhone || "").replace(/\D/g, "").slice(-10));
+ const ten = liveLoginTen() || readLoginTen() || String(customerPhone || "").replace(/\D/g, "").slice(-10);
   const snap = readShopIdentity(ten);
   const shopName = snap?.shopName || "";
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
-  const inbox = incoming.filter((t) => !isOwnCustomerOrder(t, customerPhone));
+  const inbox = incoming.filter((t) => !isOwnCustomerOrder(t, ten));
 
   useEffect(() => {
     if (ten.length !== 10) return;
-    const rows = readAccountBackup(ten)?.incoming ?? [];
-    if (rows.length) useVaani.getState().replaceIncoming(rows);
+    const rows = readVendorInbox(ten);
+    if (rows.length) useVaani.setState({ incoming: rows });
   }, [ten]);
 
   return (

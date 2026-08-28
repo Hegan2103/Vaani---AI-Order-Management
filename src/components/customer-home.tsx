@@ -14,7 +14,7 @@ import { ShopCard } from "@/components/shop-card";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, liveLoginTen, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { listedVendors, liveLoginTen, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, shopNameForTen, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -283,7 +283,11 @@ export function CustomerHome() {
                       {g.tickets.map((row) => {
                         const byPhone = row.vendorPhone ? vendorForPhone(row.vendorPhone) : undefined;
                         const vend = byPhone || vendorById(row.vendorId);
-                        const title = vend?.shop || vend?.name || row.vendorShop || t("vendor");
+                        const vTen = phoneDigits(row.vendorPhone || vend?.phone || "");
+                        let title = vend?.shop || vend?.name || row.vendorShop || t("vendor");
+                        if (vTen && vTen !== meTen && title === (customerName || "").trim()) {
+                          title = shopNameForTen(vTen, vTen ? `Shop ${vTen}` : t("vendor"));
+                        }
                         const phone = vend?.phone || row.vendorPhone || "";
                         return (
                           <li key={row.id}>

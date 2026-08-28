@@ -11,6 +11,7 @@ const DIR_KEY = "vaani-dir-contacts";
 const DIR_FLAG = "vaani-dir-pulled";
 const LISTED_KEY = "vaani-listed-vendors-v1";
 const LANG_KEY = "vaani-ui-language";
+const INBOX_KEY = "vaani-inbox-v1";
 
 export function purgeStaleClientCache() {
   return false;
@@ -675,10 +676,51 @@ export function isOwnCustomerOrder(ticket: Ticket, phone: string) {
   return phoneDigits(ticket.customerPhone) === ten;
 }
 
+export function shopNameForTen(ten: string, fallback = "") {
+  const t = phoneDigits(ten);
+  if (t.length !== 10) return fallback;
+  try {
+    const pin = JSON.parse(localStorage.getItem(`vaani-shop-locked:${t}`) || "null") as ShopIdentity | null;
+    if (pin?.shopName?.trim()) {
+      const stored = phoneDigits(pin.phone);
+      if (!stored || stored === t) return pin.shopName.trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  const me = liveLoginTen() || readLoginTen();
+  const myName = (useVaani.getState().customerName || "").trim();
+  const listed = listedVendors().find((v) => phoneDigits(v.phone) === t);
+  if (listed?.shop?.trim() && !(t !== me && listed.shop.trim() === myName)) {
+    return listed.shop.trim();
+  }
+  return fallback || `Shop ${t}`;
+}
+
+export function readVendorInbox(ten: string): Ticket[] {
+  if (typeof window === "undefined") return [];
+  const t = phoneDigits(ten);
+  if (t.length !== 10) return [];
+  try {
+    const all = JSON.parse(localStorage.getItem(INBOX_KEY) || "{}") as Record<string, Ticket[]>;
+    return Array.isArray(all[t]) ? all[t] : [];
+  } catch {
+    return [];
+  }
+}
+
 export function pushIncomingToVendor(vendorPhone: string, vendorId: string, ticket: Ticket) {
   if (typeof window === "undefined") return;
   const ten = phoneDigits(vendorPhone) || String(vendorId).match(/(\d{10})/)?.[1] || "";
   if (ten.length !== 10) return;
+  try {
+    const box = JSON.parse(localStorage.getItem(INBOX_KEY) || "{}") as Record<string, Ticket[]>;
+    box[ten] = mergeTicketLists(box[ten] || [], [ticket]);
+    localStorage.setItem(INBOX_KEY, JSON.stringify(box));
+    sessionStorage.setItem(INBOX_KEY, JSON.stringify(box));
+  } catch {
+    /* ignore */
+  }
   try {
     const all = JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}") as Record<string, AccountBackup>;
     const prev = all[ten] || {
