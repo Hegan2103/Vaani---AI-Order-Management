@@ -445,13 +445,17 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                   maxLength={10}
                   defaultValue=""
                   placeholder="9876543210"
-                  onInput={(e) => setDigits((e.target as HTMLInputElement).value)}
-                  onChange={(e) => setDigits(e.target.value)}
+                  onInput={(e) => {
+                    const box = e.target as HTMLInputElement;
+                    const ie = e.nativeEvent as InputEvent;
+                    setDigits(box.value || ie.data || typed);
+                  }}
+                  onChange={(e) => setDigits(e.target.value || typed)}
                   className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
                 />
               </div>
               <p id="vaani-phone-count" className="mt-2 text-sm text-muted">
-                0/10
+                {Math.max(phone.length, toTen(typed).length, toTen(phoneRef.current?.value || "").length)}/10
               </p>
              <button
   type="button"
