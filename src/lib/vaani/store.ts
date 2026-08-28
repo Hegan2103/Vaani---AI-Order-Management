@@ -565,7 +565,10 @@ export function vendorById(id: string) {
   } catch {
     /* ignore */
   }
-  return listedVendors().find((v) => v.id === id);
+  const listed = listedVendors().find((v) => v.id === id);
+  if (listed) return listed;
+  const ten = String(id).match(/(\d{10})/)?.[1] || "";
+  return ten ? vendorForPhone(ten) : undefined;
 }
 
 export function vendorForPhone(phone: string) {
