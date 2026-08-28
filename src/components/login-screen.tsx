@@ -240,8 +240,6 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const otpRef = useRef<HTMLInputElement>(null);
-  const phoneHostRef = useRef<HTMLSpanElement>(null);
-  const nativePhone = useRef<HTMLInputElement | null>(null);
   const language = useVaani((s) => s.language);
   const setLanguage = useVaani((s) => s.setLanguage);
   const { t } = useT();
@@ -257,56 +255,42 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   }, []);
 
   function livePhone() {
-    return toTen(nativePhone.current?.value || phoneRef.current?.value || typed || phone);
+    return toTen(phoneRef.current?.value || phone);
   }
 
   function liveOtp() {
     return String(otpRef.current?.value || otp).replace(/\D/g, "").slice(0, 6);
   }
 
-  function paintPhone(ten: string) {
+  function setDigits(next: string) {
+    const ten = toTen(next);
     persistTyping(ten);
-    setPhone((prev) => (prev === ten ? prev : ten));
-    const node = document.getElementById("vaani-phone-count");
-    if (node) node.textContent = `${ten.length}/10`;
+    setPhone(ten);
+    setErr(null);
   }
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (step !== "phone") return;
-    const host = phoneHostRef.current;
-    if (!host) return;
-    host.replaceChildren();
-    const el = document.createElement("input");
-    el.type = "text";
-    el.inputMode = "numeric";
-    el.setAttribute("inputmode", "numeric");
-    el.setAttribute("pattern", "[0-9]*");
-    el.setAttribute("autocomplete", "off");
-    el.setAttribute("autocorrect", "off");
-    el.setAttribute("autocapitalize", "off");
-    el.setAttribute("spellcheck", "false");
-    el.setAttribute("maxlength", "10");
-    el.setAttribute("enterkeyhint", "done");
-    el.placeholder = "9876543210";
-    el.className =
-      "min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none";
-    el.style.width = "100%";
-    el.style.border = "0";
-    el.style.outline = "none";
-    el.style.background = "transparent";
-    host.appendChild(el);
-    nativePhone.current = el;
-    phoneRef.current = el;
-    const tick = () => paintPhone(toTen(el.value));
-    el.addEventListener("input", tick);
-    el.addEventListener("keyup", tick);
-    el.addEventListener("change", tick);
-    el.addEventListener("paste", () => window.setTimeout(tick, 0));
-    const id = window.setInterval(tick, 50);
+  const pull = () => {
+      const el = phoneRef.current;
+      if (!el) return;
+      const ten = toTen(el.value);
+      setPhone((prev) => (prev === ten ? prev : ten));
+      persistTyping(ten);
+    };
+    pull();
+    const el = phoneRef.current;
+    el?.addEventListener("input", pull);
+    el?.addEventListener("keyup", pull);
+    el?.addEventListener("change", pull);
+    el?.addEventListener("paste", pull);
+    const id = window.setInterval(pull, 100);
     return () => {
       window.clearInterval(id);
-      nativePhone.current = null;
-      el.remove();
+      el?.removeEventListener("input", pull);
+      el?.removeEventListener("keyup", pull);
+      el?.removeEventListener("change", pull);
+      el?.removeEventListener("paste", pull);
     };
   }, [step]);
 
@@ -427,10 +411,23 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               <p className="mt-5 text-xs text-muted">{t("mobile")}</p>
               <div className="mt-1 flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-white px-3 py-3">
                 <span className="text-sm text-muted">+91</span>
-                <span ref={phoneHostRef} className="flex min-h-11 min-w-0 flex-1 items-center" />
+                <input
+                  ref={phoneRef}
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  name="mobile"
+                  maxLength={10}
+                  defaultValue=""
+                  placeholder="9876543210"
+                  onInput={(e) => setDigits((e.target as HTMLInputElement).value)}
+                  onChange={(e) => setDigits(e.target.value)}
+                  onKeyUp={(e) => setDigits((e.target as HTMLInputElement).value)}
+                  className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
+                />
               </div>
-              <p id="vaani-phone-count" className="mt-2 text-sm text-muted">
-                {t("digitsCount", { n: phone.length })}
+              <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
+                {livePhone().length === 10 ? t("digitsReady", { n: livePhone().length }) : t("digitsCount", { n: livePhone().length })}
               </p>
              <button
   type="button"
@@ -460,21 +457,13 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               <p className="mt-5 text-xs text-muted">{t("otpLabel")}</p>
               <input
                 ref={otpRef}
-                type="text"
+                type="tel"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 autoComplete="one-time-code"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
                 name="otp"
                 maxLength={6}
-                value={otp}
+                defaultValue=""
                 placeholder="______"
-                onChange={(e) => {
-                  setOtp(e.target.value.replace(/\D/g, "").slice(0, 6));
-                  setErr(null);
-                }}
                 className="mt-1 h-12 w-full rounded-[var(--radius-md)] border border-line bg-white px-3 text-center text-xl font-medium tracking-[0.4em] outline-none"
               />
               <p className={`mt-2 text-sm ${otp.length === 6 ? "font-medium text-ink" : "text-muted"}`}>
