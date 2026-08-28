@@ -168,10 +168,10 @@ function TicketPage() {
       <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl tracking-tight md:text-4xl">
-            {role === "vendor" ? ticket.customerName || t("customer") : vendor?.shop ?? t("vendor")}
+            {role === "vendor" ? ticket.customerName || t("customer") : ticket.vendorShop || vendor?.shop || t("vendor")}
           </h1>
           <p className="text-sm text-muted">
-            {role === "vendor" ? ticket.customerPhone : vendor?.phone || ""}
+            {role === "vendor" ? ticket.customerPhone : ticket.vendorPhone || vendor?.phone || ""}
             {vendor ? ` · ${tradeLabel(vendor.industry)}` : ""}
           </p>
         </div>

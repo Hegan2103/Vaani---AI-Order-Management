@@ -14,7 +14,7 @@ import { ShopCard } from "@/components/shop-card";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { listedVendors, liveLoginTen, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -33,7 +33,7 @@ export function CustomerHome() {
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
-  const meTen = phoneDigits(customerPhone) || readLoginTen();
+  const meTen = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
 
   useEffect(() => {
     const rows = readDirContacts();
@@ -181,6 +181,7 @@ export function CustomerHome() {
           filtered.map((c) => {
           const ten = phoneDigits(c.phone);
           const v = ten.length === 10 && ten !== meTen ? vendorForPhone(c.phone) : undefined;
+          const canDial = Boolean(v && phoneDigits(v.phone) !== meTen);
           return (
             <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
@@ -190,7 +191,7 @@ export function CustomerHome() {
                   {v ? ` · ${tradeLabel(v.industry)}` : ""}
                 </p>
               </div>
-              {v ? (
+              {canDial && v ? (
                 <Button
                   type="button"
                   size="sm"
@@ -277,9 +278,12 @@ export function CustomerHome() {
                               onClick={() => void navigate({ to: "/ticket/$ticketId", params: { ticketId: row.id } })}
                             >
                               <div className="min-w-0">
-                                <p className="truncate font-medium">{vend?.shop ?? row.customerName}</p>
+                                <p className="truncate font-medium">{row.vendorShop || vend?.shop || vend?.name || t("vendor")}</p>
                                 <p className="truncate text-xs text-muted">
-                                  {t("linesCount", { n: row.lines.length })} · {new Date(row.createdAt).toLocaleString(locale)}
+                                  {t("linesCount", { n: row.lines.length })}
+                                  {row.vendorPhone || vend?.phone ? ` · ${row.vendorPhone || vend?.phone}` : ""}
+                                  {" · "}
+                                  {new Date(row.createdAt).toLocaleString(locale)}
                                 </p>
                               </div>
                               <StatusPill status={row.status} />
