@@ -26,7 +26,6 @@ export function CustomerHome() {
   const customerPhone = useVaani((s) => s.customerPhone);
   const mergeContacts = useVaani((s) => s.mergeContacts);
   const liveVendors = useVaani((s) => s.liveVendors);
-  const setLiveVendors = useVaani((s) => s.setLiveVendors);
   const [q, setQ] = useState("");
   const [industry, setIndustry] = useState<Industry | "all">("all");
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -199,10 +198,6 @@ export function CustomerHome() {
                     const ten = readLoginTen();
                     if (ten.length === 10) rememberLoginTen(ten);
                     keepSession();
-                    const live = useVaani.getState().liveVendors;
-                    if (!live.some((row) => row.id === v.id)) {
-                      setLiveVendors([...live, v]);
-                    }
                     setRole("customer");
                     setCallVendorId(v.id);
                   }}

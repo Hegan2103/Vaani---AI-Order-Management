@@ -131,13 +131,6 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     remember(identity);
     setId(identity);
     setShopIdentity(identity);
-    void fetch("/api/vaani/vendors", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(identity),
-    }).catch(() => {
-      /* local shop still saved */
-    });
     EDITING = false;
     setEditing(false);
     setShopMsg(t("shopSaved"));
