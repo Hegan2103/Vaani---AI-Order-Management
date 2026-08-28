@@ -267,6 +267,8 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     persistTyping(ten);
     setPhone(ten);
     setErr(null);
+    const node = document.getElementById("vaani-phone-count");
+    if (node) node.textContent = ten.length === 10 ? `${ten.length}/10` : `${ten.length}/10`;
   }
 
   function wakePhoneBox() {
@@ -284,26 +286,48 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     const el = phoneRef.current;
     if (!el) return;
     const pull = () => {
-      const ten = toTen(el.value);
-      persistTyping(ten);
-      setPhone((prev) => (prev === ten ? prev : ten));
+      const box = toTen(el.value);
+      if (box.length) setDigits(box);
+    };
+    const addFromKey = (e: Event) => {
+      const ke = e as KeyboardEvent;
+      if (ke.key === "Backspace" || ke.key === "Delete") {
+        const box = toTen(el.value);
+        setDigits(box.length ? box : typed.slice(0, -1));
+        return;
+      }
+      let d = "";
+      if (ke.key >= "0" && ke.key <= "9") d = ke.key;
+      else if (/^Digit[0-9]$/.test(ke.code)) d = ke.code.slice(5);
+      else if (ke.keyCode >= 48 && ke.keyCode <= 57) d = String(ke.keyCode - 48);
+      if (!d) return;
+      const box = toTen(el.value);
+      setDigits(box.length > typed.length ? box : typed + d);
+    };
+    const onBefore = (e: Event) => {
+      const ie = e as InputEvent;
+      if (ie.inputType?.startsWith("delete")) {
+        setDigits(toTen(el.value) || typed.slice(0, -1));
+        return;
+      }
+      const data = ie.data;
+      if (!data || !/\d/.test(data)) return;
+      const box = toTen(el.value);
+      setDigits(box.length ? box : typed + data);
     };
     pull();
-    const onBefore = (e: Event) => {
-      const data = (e as InputEvent).data;
-      if (!data || !/\d/.test(data)) return;
-      if (toTen(el.value).length === 0) setDigits(data);
-    };
     el.addEventListener("input", pull);
     el.addEventListener("keyup", pull);
+    el.addEventListener("keydown", addFromKey);
     el.addEventListener("change", pull);
     el.addEventListener("paste", pull);
     el.addEventListener("beforeinput", onBefore);
-    const id = window.setInterval(pull, 100);
+    const id = window.setInterval(pull, 50);
     return () => {
       window.clearInterval(id);
       el.removeEventListener("input", pull);
       el.removeEventListener("keyup", pull);
+      el.removeEventListener("keydown", addFromKey);
       el.removeEventListener("change", pull);
       el.removeEventListener("paste", pull);
       el.removeEventListener("beforeinput", onBefore);
@@ -444,8 +468,8 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                   className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
                 />
               </div>
-              <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
-                {livePhone().length === 10 ? t("digitsReady", { n: livePhone().length }) : t("digitsCount", { n: livePhone().length })}
+              <p id="vaani-phone-count" className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
+                {phone.length === 10 ? t("digitsReady", { n: phone.length }) : t("digitsCount", { n: phone.length })}
               </p>
              <button
   type="button"
