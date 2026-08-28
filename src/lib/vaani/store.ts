@@ -302,8 +302,6 @@ export function readShopIdentity(phone?: string): ShopIdentity | null {
     if (!keyed) return null;
     const p = JSON.parse(keyed) as ShopIdentity;
     if (!p?.shopName?.trim()) return null;
-    const storedTen = phoneDigits(p.phone);
-    if (storedTen.length === 10 && storedTen !== ten) return null;
     return { ...p, phone: formatInPhone(ten) };
   } catch {
     return null;
@@ -370,8 +368,6 @@ export function writeShopIdentity(p: ShopIdentity) {
   try {
     const ten = liveLoginTen() || readLoginTen() || phoneDigits(p.phone);
     if (ten.length !== 10) return;
-    const storedTen = phoneDigits(p.phone);
-    if (storedTen.length === 10 && storedTen !== ten) return;
     const clean: ShopIdentity = { ...p, phone: formatInPhone(ten) };
     const raw = JSON.stringify(clean);
     sessionStorage.setItem(`${SHOP_KEY}:${ten}`, raw);

@@ -14,8 +14,6 @@ function remember(p: Partial<ShopIdentity> | null | undefined, ten?: string) {
   const login = phoneDigits(ten || liveLoginTen() || readLoginTen() || p?.phone || "");
   const shopName = (p?.shopName || "").trim();
   if (!shopName || login.length !== 10) return LOCKED;
-  const storedTen = phoneDigits(p?.phone || "");
-  if (storedTen.length === 10 && storedTen !== login) return LOCKED;
   LOCKED = {
     shopName,
     phone: formatInPhone(login),
