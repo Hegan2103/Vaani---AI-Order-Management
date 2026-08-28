@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { getTicket, saveTicket } from "@/lib/vaani/account";
 import { composeOrderCopy } from "@/lib/vaani/ai";
 import { useT } from "@/lib/vaani/i18n";
-import { mergeOneTicket, useVaani, vendorById } from "@/lib/vaani/store";
+import { mergeOneTicket, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { LineItem, Ticket } from "@/lib/vaani/types";
 
 export const Route = createFileRoute("/ticket/$ticketId")({ component: TicketPage });
@@ -93,7 +93,10 @@ function TicketPage() {
   const ticket = found;
   const locked = ticket.status === "finalized" || ticket.status === "delivered";
 
-  const vendor = vendorById(ticket.vendorId) ?? liveVendors.find((v) => v.id === ticket.vendorId);
+  const vendor =
+    vendorForPhone(ticket.vendorPhone || "") ||
+    vendorById(ticket.vendorId) ||
+    liveVendors.find((v) => v.id === ticket.vendorId);
   const pending = ticket.lines.some((l) => l.status === "pending");
   const waitingOnPrice = ticket.lines.some((l) => l.status === "quoted");
   const vendorReady =

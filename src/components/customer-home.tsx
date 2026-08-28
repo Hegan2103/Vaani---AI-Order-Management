@@ -43,7 +43,20 @@ export function CustomerHome() {
   const filtered = useMemo(() => {
     const dir = readDirContacts();
     const book = dir ?? contacts.filter((c) => c.source === "phone");
-    const rows = dir != null || book.length ? book : contacts;
+    let rows = dir != null || book.length ? [...book] : [...contacts];
+    const seen = new Set(rows.map((c) => phoneDigits(c.phone)).filter((n) => n.length === 10));
+    for (const v of listedVendors()) {
+      const ten = phoneDigits(v.phone);
+      if (ten.length !== 10 || ten === meTen || seen.has(ten)) continue;
+      seen.add(ten);
+      rows.push({
+        id: v.id,
+        name: v.shop || v.name,
+        phone: v.phone,
+        vendorId: v.id,
+        source: "vaani",
+      });
+    }
     return rows.filter((c) => {
       const v = vendorForPhone(c.phone);
       if (industry !== "all" && v?.industry && v.industry !== industry) return false;
@@ -268,7 +281,10 @@ export function CustomerHome() {
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{g.label}</p>
                     <ul className="space-y-2">
                       {g.tickets.map((row) => {
-                        const vend = vendorById(row.vendorId);
+                        const byPhone = row.vendorPhone ? vendorForPhone(row.vendorPhone) : undefined;
+                        const vend = byPhone || vendorById(row.vendorId);
+                        const title = vend?.shop || vend?.name || row.vendorShop || t("vendor");
+                        const phone = vend?.phone || row.vendorPhone || "";
                         return (
                           <li key={row.id}>
                             <Link
@@ -278,10 +294,10 @@ export function CustomerHome() {
                               onClick={() => void navigate({ to: "/ticket/$ticketId", params: { ticketId: row.id } })}
                             >
                               <div className="min-w-0">
-                                <p className="truncate font-medium">{row.vendorShop || vend?.shop || vend?.name || t("vendor")}</p>
+                                <p className="truncate font-medium">{title}</p>
                                 <p className="truncate text-xs text-muted">
                                   {t("linesCount", { n: row.lines.length })}
-                                  {row.vendorPhone || vend?.phone ? ` · ${row.vendorPhone || vend?.phone}` : ""}
+                                  {phone ? ` · ${phone}` : ""}
                                   {" · "}
                                   {new Date(row.createdAt).toLocaleString(locale)}
                                 </p>
