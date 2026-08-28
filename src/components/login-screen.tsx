@@ -269,28 +269,44 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     setErr(null);
   }
 
-  useEffect(() => {
+  function wakePhoneBox() {
+    const el = phoneRef.current;
+    if (!el || el.dataset.awake === "1") return;
+    el.dataset.awake = "1";
+    const cur = el.value;
+    el.value = `${cur}0`;
+    el.value = cur;
+    setDigits(el.value);
+  }
+
+  useLayoutEffect(() => {
     if (step !== "phone") return;
-  const pull = () => {
-      const el = phoneRef.current;
-      if (!el) return;
+    const el = phoneRef.current;
+    if (!el) return;
+    const pull = () => {
       const ten = toTen(el.value);
-      setPhone((prev) => (prev === ten ? prev : ten));
       persistTyping(ten);
+      setPhone((prev) => (prev === ten ? prev : ten));
     };
     pull();
-    const el = phoneRef.current;
-    el?.addEventListener("input", pull);
-    el?.addEventListener("keyup", pull);
-    el?.addEventListener("change", pull);
-    el?.addEventListener("paste", pull);
+    const onBefore = (e: Event) => {
+      const data = (e as InputEvent).data;
+      if (!data || !/\d/.test(data)) return;
+      if (toTen(el.value).length === 0) setDigits(data);
+    };
+    el.addEventListener("input", pull);
+    el.addEventListener("keyup", pull);
+    el.addEventListener("change", pull);
+    el.addEventListener("paste", pull);
+    el.addEventListener("beforeinput", onBefore);
     const id = window.setInterval(pull, 100);
     return () => {
       window.clearInterval(id);
-      el?.removeEventListener("input", pull);
-      el?.removeEventListener("keyup", pull);
-      el?.removeEventListener("change", pull);
-      el?.removeEventListener("paste", pull);
+      el.removeEventListener("input", pull);
+      el.removeEventListener("keyup", pull);
+      el.removeEventListener("change", pull);
+      el.removeEventListener("paste", pull);
+      el.removeEventListener("beforeinput", onBefore);
     };
   }, [step]);
 
@@ -420,6 +436,8 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                   maxLength={10}
                   defaultValue=""
                   placeholder="9876543210"
+                  onTouchStart={wakePhoneBox}
+                  onFocus={wakePhoneBox}
                   onInput={(e) => setDigits((e.target as HTMLInputElement).value)}
                   onChange={(e) => setDigits(e.target.value)}
                   onKeyUp={(e) => setDigits((e.target as HTMLInputElement).value)}
