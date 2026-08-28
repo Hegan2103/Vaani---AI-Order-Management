@@ -23,6 +23,7 @@ export function CustomerHome() {
   const setCallVendorId = useVaani((s) => s.setCallVendorId);
   const contacts = useVaani((s) => s.contacts);
   const tickets = useVaani((s) => s.tickets);
+  const customerName = useVaani((s) => s.customerName);
   const customerPhone = useVaani((s) => s.customerPhone);
   const mergeContacts = useVaani((s) => s.mergeContacts);
   const liveVendors = useVaani((s) => s.liveVendors);
