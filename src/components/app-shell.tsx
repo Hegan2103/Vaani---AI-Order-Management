@@ -111,6 +111,21 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   }, []);
 
   useEffect(() => {
+    void fetch("/api/vaani/vendors")
+      .then((r) => r.json())
+      .then((rows) => {
+        if (!Array.isArray(rows) || !rows.length) return;
+        const live = useVaani.getState().liveVendors;
+        const seen = new Set(live.map((v) => v.id));
+        const extra = rows.filter((v: { id?: string }) => v?.id && !seen.has(v.id));
+        if (extra.length) setLiveVendors([...live, ...extra]);
+      })
+      .catch(() => {
+        /* local list still used */
+      });
+  }, [setLiveVendors]);
+
+  useEffect(() => {
     if (pathname === "/vendor") setRole("vendor");
     else if (pathname === "/") setRole("customer");
   }, [pathname, setRole]);
