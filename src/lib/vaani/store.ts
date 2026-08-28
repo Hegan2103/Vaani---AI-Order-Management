@@ -648,6 +648,42 @@ export function isOwnCustomerOrder(ticket: Ticket, phone: string) {
   return phoneDigits(ticket.customerPhone) === ten;
 }
 
+export function pushIncomingToVendor(vendorPhone: string, vendorId: string, ticket: Ticket) {
+  if (typeof window === "undefined") return;
+  const ten = phoneDigits(vendorPhone) || String(vendorId).match(/(\d{10})/)?.[1] || "";
+  if (ten.length !== 10) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}") as Record<string, AccountBackup>;
+    const prev = all[ten] || {
+      shopName: "",
+      phone: formatInPhone(ten),
+      industry: "" as Industry | "",
+      isVendor: true,
+      language: "en-IN",
+      claimedVendorId: vendorId,
+      tickets: [] as Ticket[],
+      incoming: [] as Ticket[],
+    };
+    const incoming = mergeTicketLists(prev.incoming || [], [ticket]);
+    all[ten] = {
+      ...prev,
+      incoming,
+      isVendor: true,
+      claimedVendorId: prev.claimedVendorId || vendorId,
+    };
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(all));
+    sessionStorage.setItem(BACKUP_KEY, JSON.stringify(all));
+    localStorage.setItem(
+      `vaani-tickets-v1:${ten}`,
+      JSON.stringify({ tickets: prev.tickets || [], incoming }),
+    );
+  } catch {
+    /* ignore */
+  }
+  const me = phoneDigits(useVaani.getState().customerPhone) || readLoginTen();
+  if (me === ten) useVaani.getState().upsertIncoming(ticket);
+}
+
 export function readLastTicket(): Ticket | null {
   if (typeof window === "undefined") return null;
   try {

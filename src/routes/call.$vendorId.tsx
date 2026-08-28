@@ -8,7 +8,7 @@ import { parseVoiceOrder } from "@/lib/vaani/ai";
 import { fallbackParse } from "@/lib/vaani/match";
 import { LANGUAGES, formatInPhone, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { findOpenTicket, readLoginTen, useVaani, vendorById } from "@/lib/vaani/store";
+import { findOpenTicket, pushIncomingToVendor, readLoginTen, useVaani, vendorById } from "@/lib/vaani/store";
 import type { LineItem, Ticket } from "@/lib/vaani/types";
 
 export const Route = createFileRoute("/call/$vendorId")({ component: CallRoute });
@@ -216,6 +216,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
         updatedAt: new Date().toISOString(),
       };
       upsertTicket(next);
+      pushIncomingToVendor(vendor.phone, vendor.id, next);
       setCallVendorId("");
       try {
         await saveTicket({ data: { ticket: next } });
@@ -240,6 +241,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       updatedAt: new Date().toISOString(),
     };
     upsertTicket(ticket);
+    pushIncomingToVendor(vendor.phone, vendor.id, ticket);
     setCallVendorId("");
     try {
       await saveTicket({ data: { ticket } });

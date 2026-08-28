@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Inbox } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/status-pill";
 import {
   DEFAULT_DATE_FILTER,
@@ -11,7 +11,7 @@ import {
 } from "@/components/order-date-filter";
 import { ShopCard } from "@/components/shop-card";
 import { useT } from "@/lib/vaani/i18n";
-import { readShopIdentity, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
+import { readAccountBackup, readShopIdentity, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
   const incoming = useVaani((s) => s.incoming);
@@ -28,6 +28,12 @@ export function VendorHome() {
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
   const inbox = incoming.filter((t) => !isOwnCustomerOrder(t, customerPhone));
+
+  useEffect(() => {
+    if (ten.length !== 10) return;
+    const rows = readAccountBackup(ten)?.incoming ?? [];
+    if (rows.length) useVaani.getState().replaceIncoming(rows);
+  }, [ten]);
 
   return (
     <>

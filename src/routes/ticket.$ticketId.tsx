@@ -171,7 +171,7 @@ function TicketPage() {
             {role === "vendor" ? ticket.customerName || t("customer") : vendor?.shop ?? t("vendor")}
           </h1>
           <p className="text-sm text-muted">
-            {ticket.customerPhone}
+            {role === "vendor" ? ticket.customerPhone : vendor?.phone || ""}
             {vendor ? ` · ${tradeLabel(vendor.industry)}` : ""}
           </p>
         </div>
