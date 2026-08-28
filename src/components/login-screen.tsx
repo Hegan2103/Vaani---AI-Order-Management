@@ -238,7 +238,6 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   const [previewCode, setPreviewCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);
   const otpRef = useRef<HTMLInputElement>(null);
   const language = useVaani((s) => s.language);
@@ -253,7 +252,6 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     }
     document.documentElement.removeAttribute("data-vaani-phone");
     document.documentElement.removeAttribute("data-vaani-shop");
-    setReady(true);
   }, []);
 
   function livePhone() {
@@ -447,9 +445,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
           <p className="font-display text-3xl tracking-tight">Vaani</p>
           <h1 className="mt-1 text-lg font-medium">{t("signIn")}</h1>
 
-          {!ready ? (
-            <p className="mt-6 text-sm text-muted">…</p>
-          ) : step === "phone" ? (
+          {step === "phone" ? (
             <>
               <p className="mt-3 text-sm text-muted">{t("enterMobile")}</p>
               <p className="mt-5 text-xs text-muted">{t("mobile")}</p>
