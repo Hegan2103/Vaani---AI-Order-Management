@@ -17,7 +17,7 @@ const EN = {
   shopViewError: "Could not open the shop view.",
 
   signIn: "Sign in",
-  enterMobile: "Enter your 10-digit mobile number.",
+  enterMobile: "On a phone, tap the digit pad. On a computer, you can type your 10-digit number.",
   mobile: "Mobile",
   digitsReady: "{n}/10 digits — ready",
   digitsCount: "{n}/10 digits",

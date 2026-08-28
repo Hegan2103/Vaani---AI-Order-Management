@@ -1,4 +1,4 @@
-import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { GROK_PROVIDERS, signIn, storeBearerToken } from "@/lib/auth/client";
 import {
@@ -25,6 +25,50 @@ function toTen(raw: string) {
   if (d.startsWith("91") && d.length >= 12) d = d.slice(2);
   if (d.startsWith("0") && d.length === 11) d = d.slice(1);
   return d.slice(0, 10);
+}
+
+function usePhonePad() {
+  const [pad, setPad] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(pointer: coarse), (max-width: 48rem)").matches,
+  );
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse), (max-width: 48rem)");
+    const apply = () => setPad(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  return pad;
+}
+
+function DigitPad({
+  onDigit,
+  onDel,
+  onClear,
+}: {
+  onDigit: (d: string) => void;
+  onDel: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="mt-3 grid grid-cols-3 gap-2">
+      {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "C"].map((key) => (
+        <button
+          key={key}
+          type="button"
+          className="inline-flex h-12 touch-manipulation items-center justify-center rounded-[var(--radius-md)] border border-line bg-bg text-lg font-medium"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            if (key === "⌫") onDel();
+            else if (key === "C") onClear();
+            else onDigit(key);
+          }}
+        >
+          {key}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function persistTyping(ten: string) {
@@ -243,6 +287,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   const language = useVaani((s) => s.language);
   const setLanguage = useVaani((s) => s.setLanguage);
   const { t } = useT();
+  const pad = usePhonePad();
 
   useLayoutEffect(() => {
     const bar = document.getElementById("vaani-cred-bar");
@@ -255,11 +300,11 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   }, []);
 
   function livePhone() {
-    return toTen(phoneRef.current?.value || phone);
+    return toTen(phone);
   }
 
   function liveOtp() {
-    return String(otpRef.current?.value || otp).replace(/\D/g, "").slice(0, 6);
+    return String(otp).replace(/\D/g, "").slice(0, 6);
   }
 
   function setDigits(next: string) {
@@ -268,50 +313,6 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     setPhone(ten);
     setErr(null);
   }
-
-  useEffect(() => {
-    if (step !== "phone") return;
-  const pull = () => {
-      const el = phoneRef.current;
-      if (!el) return;
-      const ten = toTen(el.value);
-      setPhone((prev) => (prev === ten ? prev : ten));
-      persistTyping(ten);
-    };
-    pull();
-    const el = phoneRef.current;
-    el?.addEventListener("input", pull);
-    el?.addEventListener("keyup", pull);
-    el?.addEventListener("change", pull);
-    el?.addEventListener("paste", pull);
-    const id = window.setInterval(pull, 100);
-    return () => {
-      window.clearInterval(id);
-      el?.removeEventListener("input", pull);
-      el?.removeEventListener("keyup", pull);
-      el?.removeEventListener("change", pull);
-      el?.removeEventListener("paste", pull);
-    };
-  }, [step]);
-
-  useEffect(() => {
-    if (step !== "otp") return;
-    const el = otpRef.current;
-    if (!el) return;
-    const sync = () => {
-      const code = el.value.replace(/\D/g, "").slice(0, 6);
-      setOtp(code);
-      setErr(null);
-    };
-    el.addEventListener("input", sync);
-    el.addEventListener("keyup", sync);
-    el.addEventListener("change", sync);
-    return () => {
-      el.removeEventListener("input", sync);
-      el.removeEventListener("keyup", sync);
-      el.removeEventListener("change", sync);
-    };
-  }, [step]);
 
   function requestCode() {
     const ten = livePhone();
@@ -413,36 +414,42 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 <span className="text-sm text-muted">+91</span>
                 <input
                   ref={phoneRef}
-                  type="tel"
+                  type="text"
                   inputMode="numeric"
-                  autoComplete="tel"
-                  name="mobile"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  name="vaani-mobile"
                   maxLength={10}
-                  defaultValue=""
+                  readOnly={pad}
+                  value={phone}
                   placeholder="9876543210"
-                  onInput={(e) => setDigits((e.target as HTMLInputElement).value)}
                   onChange={(e) => setDigits(e.target.value)}
-                  onKeyUp={(e) => setDigits((e.target as HTMLInputElement).value)}
                   className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
                 />
               </div>
               <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
-                {livePhone().length === 10 ? t("digitsReady", { n: livePhone().length }) : t("digitsCount", { n: livePhone().length })}
+                {phone.length === 10 ? t("digitsReady", { n: phone.length }) : t("digitsCount", { n: phone.length })}
               </p>
-             <button
-  type="button"
-  className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
-  onClick={() => {
-    const ten = livePhone();
-    if (ten.length === 10) {
-      requestCode();
-    } else {
-      setErr(t("tapTen"));
-    }
-  }}
->
-  {t("sendCode")}
-</button>
+              {pad ? (
+                <DigitPad
+                  onDigit={(d) => setDigits(phone + d)}
+                  onDel={() => setDigits(phone.slice(0, -1))}
+                  onClear={() => setDigits("")}
+                />
+              ) : null}
+              <button
+                type="button"
+                className="mt-4 inline-flex h-12 w-full touch-manipulation items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+                onClick={() => {
+                  const ten = livePhone();
+                  if (ten.length === 10) requestCode();
+                  else setErr(t("tapTen"));
+                }}
+              >
+                {t("sendCode")}
+              </button>
             </>
           ) : (
             <>
@@ -457,21 +464,36 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               <p className="mt-5 text-xs text-muted">{t("otpLabel")}</p>
               <input
                 ref={otpRef}
-                type="tel"
+                type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 name="otp"
                 maxLength={6}
-                defaultValue=""
+                readOnly={pad}
+                value={otp}
                 placeholder="______"
+                onChange={(e) => {
+                  setOtp(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  setErr(null);
+                }}
                 className="mt-1 h-12 w-full rounded-[var(--radius-md)] border border-line bg-white px-3 text-center text-xl font-medium tracking-[0.4em] outline-none"
               />
               <p className={`mt-2 text-sm ${otp.length === 6 ? "font-medium text-ink" : "text-muted"}`}>
                 {otp.length === 6 ? t("otpReady", { n: otp.length }) : t("otpCount", { n: otp.length })}
               </p>
+              {pad ? (
+                <DigitPad
+                  onDigit={(d) => setOtp((prev) => (prev + d).replace(/\D/g, "").slice(0, 6))}
+                  onDel={() => setOtp((prev) => prev.slice(0, -1))}
+                  onClear={() => setOtp("")}
+                />
+              ) : null}
               <button
                 type="button"
-                className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+                className="mt-4 inline-flex h-12 w-full touch-manipulation items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
                 onClick={checkCode}
               >
                 {t("verifySignIn")}
