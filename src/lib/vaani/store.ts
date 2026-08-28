@@ -609,7 +609,10 @@ export function vendorForPhone(phone: string) {
     /* ignore */
   }
   const listed = listedVendors().find(
-    (v) => phonesMatch(v.phone, phone) || (v.altPhones ?? []).some((p) => phonesMatch(p, phone)),
+    (v) =>
+      phonesMatch(v.phone, phone) ||
+      (v.altPhones ?? []).some((p) => phonesMatch(p, phone)) ||
+      String(v.id).includes(ten),
   );
   if (listed) return listed;
   try {
@@ -647,7 +650,7 @@ export function vendorForPhone(phone: string) {
   } catch {
     /* ignore */
   }
-  return undefined;
+  return vendorFromListing(ten, `Shop ${ten}`, "grocery");
 }
 
 export function onVaaniVendor(phone: string, vendorId?: string | null) {

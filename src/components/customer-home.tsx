@@ -194,8 +194,22 @@ export function CustomerHome() {
         ) : (
           filtered.map((c) => {
           const ten = phoneDigits(c.phone);
-          const v = ten.length === 10 && ten !== meTen ? vendorForPhone(c.phone) : undefined;
-          const canDial = Boolean(v && phoneDigits(v.phone) !== meTen);
+          const found = ten.length === 10 ? vendorForPhone(c.phone) : undefined;
+          const v =
+            ten.length === 10 && ten !== meTen
+              ? found && phoneDigits(found.phone) !== meTen
+                ? { ...found, phone: formatInPhone(ten), altPhones: [...(found.altPhones ?? []), ten] }
+                : {
+                    id: found?.id || `u-vaani-${ten}`,
+                    name: (c.name || found?.name || "").trim() || `Shop ${ten}`,
+                    shop: (c.name || found?.shop || "").trim() || `Shop ${ten}`,
+                    phone: formatInPhone(ten),
+                    city: "",
+                    industry: found?.industry || "grocery",
+                    catalog: found?.catalog || [],
+                    altPhones: [ten],
+                  }
+              : undefined;
           return (
             <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
@@ -205,7 +219,7 @@ export function CustomerHome() {
                   {v ? ` · ${tradeLabel(v.industry)}` : ""}
                 </p>
               </div>
-              {canDial && v ? (
+              {v ? (
                 <Button
                   type="button"
                   size="sm"
