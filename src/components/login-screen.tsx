@@ -255,7 +255,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   }, []);
 
   function livePhone() {
-    return toTen(phoneRef.current?.value || phone);
+    return toTen(typed || phone || phoneRef.current?.value || "");
   }
 
   function liveOtp() {
@@ -271,26 +271,91 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
 
   useEffect(() => {
     if (step !== "phone") return;
-  const pull = () => {
-      const el = phoneRef.current;
-      if (!el) return;
-      const ten = toTen(el.value);
-      setPhone((prev) => (prev === ten ? prev : ten));
-      persistTyping(ten);
-    };
-    pull();
     const el = phoneRef.current;
-    el?.addEventListener("input", pull);
-    el?.addEventListener("keyup", pull);
-    el?.addEventListener("change", pull);
-    el?.addEventListener("paste", pull);
-    const id = window.setInterval(pull, 100);
+    if (!el) return;
+    const steal = window.matchMedia("(pointer: coarse)").matches;
+    let fromBefore = false;
+
+    const onBefore = (e: Event) => {
+      const ie = e as InputEvent;
+      const box = toTen(el.value);
+      if (box.length) {
+        setDigits(box);
+        return;
+      }
+      if (!steal) return;
+      const kind = ie.inputType || "";
+      if (kind.startsWith("delete")) {
+        ie.preventDefault();
+        fromBefore = true;
+        setDigits(typed.slice(0, -1));
+        return;
+      }
+      if (ie.data && /\d/.test(ie.data)) {
+        ie.preventDefault();
+        fromBefore = true;
+        setDigits(typed + ie.data);
+        queueMicrotask(() => {
+          fromBefore = false;
+        });
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const box = toTen(el.value);
+      if (e.key === "Backspace" || e.key === "Delete") {
+        if (steal) e.preventDefault();
+        if (fromBefore) return;
+        setDigits(box.length ? box.slice(0, -1) : typed.slice(0, -1));
+        return;
+      }
+      let d = "";
+      if (e.key >= "0" && e.key <= "9") d = e.key;
+      else if (/^Digit[0-9]$/.test(e.code)) d = e.code.slice(5);
+      else if (/^Numpad[0-9]$/.test(e.code)) d = e.code.slice(6);
+      else if (e.keyCode >= 48 && e.keyCode <= 57) d = String(e.keyCode - 48);
+      if (!d) return;
+      if (steal) e.preventDefault();
+      if (fromBefore) return;
+      setDigits((box.length ? box : typed) + d);
+    };
+
+    const onPaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      setDigits(e.clipboardData?.getData("text") || "");
+    };
+
+    const onTextInput = (e: Event) => {
+      const data = (e as Event & { data?: string }).data;
+      if (!data) return;
+      if (steal) e.preventDefault();
+      const box = toTen(el.value);
+      setDigits((box.length ? box : typed) + data);
+    };
+
+    const pull = () => {
+      const box = toTen(el.value);
+      if (box) setDigits(box);
+    };
+
+    const opts = { capture: true };
+    el.addEventListener("beforeinput", onBefore, opts);
+    el.addEventListener("keydown", onKeyDown, opts);
+    el.addEventListener("keyup", pull, opts);
+    el.addEventListener("input", pull, opts);
+    el.addEventListener("change", pull, opts);
+    el.addEventListener("paste", onPaste, opts);
+    el.addEventListener("textInput", onTextInput, opts);
+    const id = window.setInterval(pull, 80);
     return () => {
       window.clearInterval(id);
-      el?.removeEventListener("input", pull);
-      el?.removeEventListener("keyup", pull);
-      el?.removeEventListener("change", pull);
-      el?.removeEventListener("paste", pull);
+      el.removeEventListener("beforeinput", onBefore, opts);
+      el.removeEventListener("keydown", onKeyDown, opts);
+      el.removeEventListener("keyup", pull, opts);
+      el.removeEventListener("input", pull, opts);
+      el.removeEventListener("change", pull, opts);
+      el.removeEventListener("paste", onPaste, opts);
+      el.removeEventListener("textInput", onTextInput, opts);
     };
   }, [step]);
 
@@ -413,21 +478,27 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 <span className="text-sm text-muted">+91</span>
                 <input
                   ref={phoneRef}
-                  type="tel"
+                  type="text"
                   inputMode="numeric"
-                  autoComplete="tel"
-                  name="mobile"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  enterKeyHint="done"
+                  name="vaani-mobile"
                   maxLength={10}
-                  defaultValue=""
+                  value={phone}
                   placeholder="9876543210"
-                  onInput={(e) => setDigits((e.target as HTMLInputElement).value)}
                   onChange={(e) => setDigits(e.target.value)}
-                  onKeyUp={(e) => setDigits((e.target as HTMLInputElement).value)}
                   className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
                 />
               </div>
-              <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
-                {livePhone().length === 10 ? t("digitsReady", { n: livePhone().length }) : t("digitsCount", { n: livePhone().length })}
+              <p
+                id="vaani-phone-count"
+                className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}
+              >
+                {phone.length === 10 ? t("digitsReady", { n: phone.length }) : t("digitsCount", { n: phone.length })}
               </p>
              <button
   type="button"
@@ -457,13 +528,21 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               <p className="mt-5 text-xs text-muted">{t("otpLabel")}</p>
               <input
                 ref={otpRef}
-                type="tel"
+                type="text"
                 inputMode="numeric"
+                pattern="[0-9]*"
                 autoComplete="one-time-code"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 name="otp"
                 maxLength={6}
-                defaultValue=""
+                value={otp}
                 placeholder="______"
+                onChange={(e) => {
+                  setOtp(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  setErr(null);
+                }}
                 className="mt-1 h-12 w-full rounded-[var(--radius-md)] border border-line bg-white px-3 text-center text-xl font-medium tracking-[0.4em] outline-none"
               />
               <p className={`mt-2 text-sm ${otp.length === 6 ? "font-medium text-ink" : "text-muted"}`}>
