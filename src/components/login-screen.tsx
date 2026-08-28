@@ -255,42 +255,64 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   }, []);
 
   function livePhone() {
-    return toTen(phoneRef.current?.value || phone);
+    return toTen(phoneRef.current?.value || typed || phone);
   }
 
   function liveOtp() {
     return String(otpRef.current?.value || otp).replace(/\D/g, "").slice(0, 6);
   }
 
-  function setDigits(next: string) {
-    const ten = toTen(next);
+  function writeCount(n: number) {
+    const node = document.getElementById("vaani-phone-count");
+    if (node) node.textContent = `${n}/10`;
+  }
+
+  function paintFromBox(raw: string) {
+    const ten = toTen(raw);
     persistTyping(ten);
-    setPhone(ten);
+    writeCount(ten.length);
+    setPhone((prev) => (prev === ten ? prev : ten));
+  }
+
+  function setDigits(next: string) {
+    paintFromBox(next);
     setErr(null);
   }
 
   useEffect(() => {
     if (step !== "phone") return;
-  const pull = () => {
-      const el = phoneRef.current;
-      if (!el) return;
-      const ten = toTen(el.value);
-      setPhone((prev) => (prev === ten ? prev : ten));
-      persistTyping(ten);
+    const el = phoneRef.current;
+    if (!el) return;
+    let composing = false;
+    const pull = () => {
+      if (composing) return;
+      paintFromBox(el.value);
     };
     pull();
-    const el = phoneRef.current;
-    el?.addEventListener("input", pull);
-    el?.addEventListener("keyup", pull);
-    el?.addEventListener("change", pull);
-    el?.addEventListener("paste", pull);
-    const id = window.setInterval(pull, 100);
+    const opts = { capture: true };
+    el.addEventListener("input", pull, opts);
+    el.addEventListener("keyup", pull, opts);
+    el.addEventListener("keydown", pull, opts);
+    el.addEventListener("change", pull, opts);
+    el.addEventListener("paste", pull, opts);
+    el.addEventListener("compositionstart", () => {
+      composing = true;
+    });
+    el.addEventListener("compositionupdate", (e) => {
+      paintFromBox((e as CompositionEvent).data || el.value);
+    });
+    el.addEventListener("compositionend", () => {
+      composing = false;
+      pull();
+    });
+    const id = window.setInterval(pull, 50);
     return () => {
       window.clearInterval(id);
-      el?.removeEventListener("input", pull);
-      el?.removeEventListener("keyup", pull);
-      el?.removeEventListener("change", pull);
-      el?.removeEventListener("paste", pull);
+      el.removeEventListener("input", pull, opts);
+      el.removeEventListener("keyup", pull, opts);
+      el.removeEventListener("keydown", pull, opts);
+      el.removeEventListener("change", pull, opts);
+      el.removeEventListener("paste", pull, opts);
     };
   }, [step]);
 
@@ -413,21 +435,23 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 <span className="text-sm text-muted">+91</span>
                 <input
                   ref={phoneRef}
-                  type="tel"
+                  type="text"
                   inputMode="numeric"
-                  autoComplete="tel"
-                  name="mobile"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  name="vaani-mobile"
                   maxLength={10}
                   defaultValue=""
                   placeholder="9876543210"
                   onInput={(e) => setDigits((e.target as HTMLInputElement).value)}
                   onChange={(e) => setDigits(e.target.value)}
-                  onKeyUp={(e) => setDigits((e.target as HTMLInputElement).value)}
                   className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-[0.12em] text-ink outline-none"
                 />
               </div>
-              <p className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
-                {livePhone().length === 10 ? t("digitsReady", { n: livePhone().length }) : t("digitsCount", { n: livePhone().length })}
+              <p id="vaani-phone-count" className="mt-2 text-sm text-muted">
+                0/10
               </p>
              <button
   type="button"
