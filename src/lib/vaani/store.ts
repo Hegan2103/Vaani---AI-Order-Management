@@ -367,21 +367,19 @@ export function writeShopIdentity(p: ShopIdentity) {
   if (typeof window === "undefined") return;
   if (!p.shopName?.trim()) return;
   try {
-    const raw = JSON.stringify(p);
-    sessionStorage.setItem(SHOP_KEY, raw);
-    localStorage.setItem(SHOP_KEY, raw);
-    const ten = phoneDigits(p.phone);
-    if (ten.length === 10) {
-      sessionStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
-      localStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
-    }
-    if (p.shopName.trim()) writeShopCookies(p);
-    if (ten.length === 10 && p.shopName.trim()) rememberListedVendor(p);
+    const ten = liveLoginTen() || readLoginTen() || phoneDigits(p.phone);
+    if (ten.length !== 10) return;
+    const storedTen = phoneDigits(p.phone);
+    if (storedTen.length === 10 && storedTen !== ten) return;
+    const clean: ShopIdentity = { ...p, phone: formatInPhone(ten) };
+    const raw = JSON.stringify(clean);
+    sessionStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
+    localStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
+    if (clean.shopName.trim()) rememberListedVendor(clean);
   } catch {
     /* ignore */
   }
 }
-
 function vendorFromListing(ten: string, shop: string, industry: Industry | "", name?: string): Vendor {
   const formatted = formatInPhone(ten);
   const title = shop.trim() || name?.trim() || `Shop ${ten}`;
@@ -414,10 +412,23 @@ export function rememberListedVendor(p: { shopName: string; phone: string; indus
 export function listedVendors(): Vendor[] {
   if (typeof window === "undefined") return [];
   const byTen = new Map<string, Vendor>();
+  const put = (ten: string, shop: string, industry: Industry | "", force = false) => {
+    const t = phoneDigits(ten);
+    const name = (shop || "").trim();
+    if (t.length !== 10 || !name) return;
+    if (!force && byTen.has(t)) return;
+    byTen.set(t, vendorFromListing(t, name, industry));
+  };
   try {
-    const all = JSON.parse(localStorage.getItem(LISTED_KEY) || "{}") as Record<string, Vendor>;
-    for (const [ten, v] of Object.entries(all)) {
-      if (phoneDigits(ten).length === 10) byTen.set(phoneDigits(ten), v);
+    const prefix = "vaani-shop-locked:";
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i) || "";
+      if (!key.startsWith(prefix)) continue;
+      const ten = phoneDigits(key.slice(prefix.length));
+      const p = JSON.parse(localStorage.getItem(key) || "{}") as ShopIdentity;
+      const stored = phoneDigits(p.phone);
+      if (stored.length === 10 && stored !== ten) continue;
+      put(ten, p.shopName, p.industry, true);
     }
   } catch {
     /* ignore */
@@ -427,9 +438,9 @@ export function listedVendors(): Vendor[] {
     for (const [key, row] of Object.entries(backups)) {
       const ten = phoneDigits(key) || phoneDigits(row.phone);
       if (ten.length !== 10) continue;
-      if (!byTen.has(ten)) {
-        byTen.set(ten, vendorFromListing(ten, row.shopName || `Shop ${ten}`, row.industry, row.shopName));
-      }
+      const stored = phoneDigits(row.phone);
+      if (stored.length === 10 && stored !== ten) continue;
+      put(ten, row.shopName, row.industry);
     }
   } catch {
     /* ignore */
@@ -441,11 +452,21 @@ export function listedVendors(): Vendor[] {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       const p = JSON.parse(raw) as ShopIdentity;
-      const ten = phoneDigits(p.phone) || phoneDigits(key.slice(SHOP_KEY.length + 1));
-      if (ten.length !== 10 || !p.shopName?.trim()) continue;
-      if (!byTen.has(ten)) {
-        byTen.set(ten, vendorFromListing(ten, p.shopName, p.industry));
-      }
+      const keyTen = phoneDigits(key.slice(SHOP_KEY.length + 1));
+      const stored = phoneDigits(p.phone);
+      if (keyTen.length !== 10 || (stored.length === 10 && stored !== keyTen)) continue;
+      if (!p.shopName?.trim()) continue;
+      put(keyTen, p.shopName, p.industry);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const all = JSON.parse(localStorage.getItem(LISTED_KEY) || "{}") as Record<string, Vendor>;
+    for (const [ten, v] of Object.entries(all)) {
+      const t = phoneDigits(ten);
+      if (t.length !== 10) continue;
+      put(t, v.shop || v.name, v.industry);
     }
   } catch {
     /* ignore */
@@ -454,14 +475,13 @@ export function listedVendors(): Vendor[] {
     const s = useVaani.getState();
     const self = phoneDigits(s.customerPhone);
     if (self.length === 10 && s.customerName.trim()) {
-      byTen.set(self, vendorFromListing(self, s.customerName, s.industry));
+      put(self, s.customerName, s.industry, true);
     }
   } catch {
     /* ignore */
   }
   return [...byTen.values()];
 }
-
 export function restoreLocalAccount(phone?: string) {
   if (typeof window === "undefined") return false;
   const ten = phoneDigits(phone || liveLoginTen() || readLoginTen());
@@ -565,7 +585,10 @@ export function vendorById(id: string) {
   } catch {
     /* ignore */
   }
-  return listedVendors().find((v) => v.id === id);
+ const listed = listedVendors().find((v) => v.id === id);
+  if (listed) return listed;
+  const ten = String(id).match(/(\d{10})/)?.[1] || "";
+  return ten ? vendorForPhone(ten) : undefined;
 }
 
 export function vendorForPhone(phone: string) {
@@ -606,7 +629,9 @@ export function vendorForPhone(phone: string) {
     const raw = localStorage.getItem(`${SHOP_KEY}:${ten}`) || sessionStorage.getItem(`${SHOP_KEY}:${ten}`);
     if (raw) {
       const p = JSON.parse(raw) as ShopIdentity;
-      if (p.shopName?.trim()) return vendorFromListing(ten, p.shopName, p.industry);
+      if (p.shopName?.trim() && (phoneDigits(p.phone) === ten || !p.phone)) {
+        return vendorFromListing(ten, p.shopName, p.industry);
+      }
     }
   } catch {
     /* ignore */
@@ -619,7 +644,7 @@ export function vendorForPhone(phone: string) {
   } catch {
     /* ignore */
   }
-  return undefined;
+  return vendorFromListing(ten, `Shop ${ten}`, "grocery");
 }
 
 export function onVaaniVendor(phone: string, vendorId?: string | null) {
@@ -641,7 +666,73 @@ function relink(contacts: Contact[], live: Vendor[]): Contact[] {
     return hit ? { ...c, vendorId: hit.id } : c;
   });
 }
+export function shopNameForTen(ten: string, fallback = "") {
+  const t = String(ten || "").replace(/\D/g, "").slice(-10);
+  if (t.length !== 10) return fallback;
+  try {
+    const pin = JSON.parse(localStorage.getItem(`vaani-shop-locked:${t}`) || "null");
+    if (pin?.shopName?.trim()) {
+      const stored = String(pin.phone || "").replace(/\D/g, "").slice(-10);
+      if (!stored || stored === t) return pin.shopName.trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallback || `Shop ${t}`;
+}
 
+export function readVendorInbox(ten: string) {
+  const t = String(ten || "").replace(/\D/g, "").slice(-10);
+  if (t.length !== 10) return [];
+  try {
+    const all = JSON.parse(localStorage.getItem("vaani-inbox-v1") || "{}");
+    return Array.isArray(all[t]) ? all[t] : [];
+  } catch {
+    return [];
+  }
+}
+export function pushIncomingToVendor(vendorPhone: string, vendorId: string, ticket: Ticket) {
+  if (typeof window === "undefined") return;
+  const ten = phoneDigits(vendorPhone) || String(vendorId).match(/(\d{10})/)?.[1] || "";
+  if (ten.length !== 10) return;
+try {
+    const box = JSON.parse(localStorage.getItem("vaani-inbox-v1") || "{}");
+    const prev = Array.isArray(box[ten]) ? box[ten] : [];
+    box[ten] = [ticket, ...prev.filter((x: { id: string }) => x.id !== ticket.id)];
+    localStorage.setItem("vaani-inbox-v1", JSON.stringify(box));
+  } catch {
+    /* ignore */
+  }  try {
+    const all = JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}") as Record<string, AccountBackup>;
+    const prev = all[ten] || {
+      shopName: "",
+      phone: formatInPhone(ten),
+      industry: "" as Industry | "",
+      isVendor: true,
+      language: "en-IN",
+      claimedVendorId: vendorId,
+      tickets: [] as Ticket[],
+      incoming: [] as Ticket[],
+    };
+    const incoming = mergeTicketLists(prev.incoming || [], [ticket]);
+    all[ten] = {
+      ...prev,
+      incoming,
+      isVendor: true,
+      claimedVendorId: prev.claimedVendorId || vendorId,
+    };
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(all));
+    sessionStorage.setItem(BACKUP_KEY, JSON.stringify(all));
+    localStorage.setItem(
+      `vaani-tickets-v1:${ten}`,
+      JSON.stringify({ tickets: prev.tickets || [], incoming }),
+    );
+  } catch {
+    /* ignore */
+  }
+  const me = phoneDigits(useVaani.getState().customerPhone) || readLoginTen();
+  if (me === ten) useVaani.getState().upsertIncoming(ticket);
+}
 export function isOwnCustomerOrder(ticket: Ticket, phone: string) {
   const ten = phoneDigits(phone);
   if (!ten) return false;

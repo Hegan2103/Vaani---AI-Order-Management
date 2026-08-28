@@ -14,8 +14,6 @@ function remember(p: Partial<ShopIdentity> | null | undefined, ten?: string) {
   const login = phoneDigits(ten || liveLoginTen() || readLoginTen() || p?.phone || "");
   const shopName = (p?.shopName || "").trim();
   if (!shopName || login.length !== 10) return LOCKED;
-  const storedTen = phoneDigits(p?.phone || "");
-  if (storedTen.length === 10 && storedTen !== login) return LOCKED;
   LOCKED = {
     shopName,
     phone: formatInPhone(login),
@@ -73,22 +71,24 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const [sellDraft, setSellDraft] = useState(Boolean(LOCKED?.isVendor));
   const [langDraft, setLangDraft] = useState(LOCKED?.language || "en-IN");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
-
+  const loginTen = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone || "");
   useLayoutEffect(() => {
-    const next = pullIdentity();
-    if (next) {
+    const load = () => {
+      const next = pullIdentity();
       setId(next);
       if (!EDITING) {
-        setShopDraft(next.shopName);
-        setIndustryDraft(next.industry || "");
-        setSellDraft(Boolean(next.isVendor));
-        setLangDraft(next.language || "en-IN");
+        setShopDraft(next?.shopName || "");
+        setIndustryDraft(next?.industry || "");
+        setSellDraft(Boolean(next?.isVendor));
+        setLangDraft(next?.language || "en-IN");
       }
-    }
-  }, []);
+    };
+    load();
+    window.addEventListener("vaani-auth", load);
+    return () => window.removeEventListener("vaani-auth", load);
+  }, [loginTen]);
 
   const shown = id || LOCKED;
-  const loginTen = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone || "");
   const savedName = (shown?.shopName || "").trim();
   const savedPhone = formatInPhone(shown?.phone || loginTen);
   const savedIndustry = shown?.industry || "";

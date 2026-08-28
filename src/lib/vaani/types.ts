@@ -64,6 +64,8 @@ export type LineItem = {
 export type Ticket = {
   id: string;
   vendorId: string;
+  vendorShop?: string;
+  vendorPhone?: string;
   customerName: string;
   customerPhone: string;
   language: string;

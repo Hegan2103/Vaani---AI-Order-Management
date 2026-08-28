@@ -1,6 +1,8 @@
+import { listIncomingTickets } from "@/lib/vaani/account";
+import { inboxIdForUser } from "@/lib/vaani/seed";
 import { Link } from "@tanstack/react-router";
 import { Inbox } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/status-pill";
 import {
   DEFAULT_DATE_FILTER,
@@ -11,7 +13,7 @@ import {
 } from "@/components/order-date-filter";
 import { ShopCard } from "@/components/shop-card";
 import { useT } from "@/lib/vaani/i18n";
-import { readShopIdentity, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
+import { mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
   const incoming = useVaani((s) => s.incoming);
@@ -28,6 +30,20 @@ export function VendorHome() {
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
   const inbox = incoming.filter((t) => !isOwnCustomerOrder(t, customerPhone));
+  useEffect(() => {
+    if (ten.length !== 10) return;
+    const local = mergeTicketLists(readVendorInbox(ten), readAccountBackup(ten)?.incoming ?? []);
+    if (local.length) useVaani.setState({ incoming: local });
+    const vendorId = inboxIdForUser(`vaani-${ten}`);
+    void listIncomingTickets({ data: { vendorId } })
+      .then((rows) => {
+        if (!Array.isArray(rows) || !rows.length) return;
+        useVaani.setState({ incoming: mergeTicketLists(useVaani.getState().incoming, rows) });
+      })
+      .catch(() => {
+        /* local inbox still used */
+      });
+  }, [ten]);
 
   return (
     <>
@@ -44,7 +60,7 @@ export function VendorHome() {
         <ShopCard />
       </div>
 
-      {!shopName || !shopIndustry || !listed ? (
+      {inbox.length === 0 && (!shopName || !shopIndustry || !listed) ? (
         <div className="rounded-[var(--radius-xl)] border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
           <p className="font-medium">{t("listYourself")}</p>
           <p className="mt-1 text-sm text-muted">{t("listYourselfHint")}</p>

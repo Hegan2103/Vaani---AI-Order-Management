@@ -14,7 +14,7 @@ import { ShopCard } from "@/components/shop-card";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { listedVendors, liveLoginTen, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -23,16 +23,18 @@ export function CustomerHome() {
   const setCallVendorId = useVaani((s) => s.setCallVendorId);
   const contacts = useVaani((s) => s.contacts);
   const tickets = useVaani((s) => s.tickets);
+  const customerName = useVaani((s) => s.customerName);
   const customerPhone = useVaani((s) => s.customerPhone);
   const mergeContacts = useVaani((s) => s.mergeContacts);
   const liveVendors = useVaani((s) => s.liveVendors);
+  const setLiveVendors = useVaani((s) => s.setLiveVendors);
   const [q, setQ] = useState("");
   const [industry, setIndustry] = useState<Industry | "all">("all");
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
-  const meTen = phoneDigits(customerPhone) || readLoginTen();
+  const meTen = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
 
   useEffect(() => {
     const rows = readDirContacts();
@@ -42,7 +44,20 @@ export function CustomerHome() {
   const filtered = useMemo(() => {
     const dir = readDirContacts();
     const book = dir ?? contacts.filter((c) => c.source === "phone");
-    const rows = dir != null || book.length ? book : contacts;
+    let rows = dir != null || book.length ? [...book] : [...contacts];
+    const seen = new Set(rows.map((c) => phoneDigits(c.phone)).filter((n) => n.length === 10));
+    for (const v of listedVendors()) {
+      const ten = phoneDigits(v.phone);
+      if (ten.length !== 10 || ten === meTen || seen.has(ten)) continue;
+      seen.add(ten);
+      rows.push({
+        id: v.id,
+        name: v.shop || v.name,
+        phone: v.phone,
+        vendorId: v.id,
+        source: "vaani",
+      });
+    }
     return rows.filter((c) => {
       const v = vendorForPhone(c.phone);
       if (industry !== "all" && v?.industry && v.industry !== industry) return false;
@@ -179,7 +194,20 @@ export function CustomerHome() {
         ) : (
           filtered.map((c) => {
           const ten = phoneDigits(c.phone);
-          const v = ten.length === 10 && ten !== meTen ? vendorForPhone(c.phone) : undefined;
+          const found = ten.length === 10 ? vendorForPhone(c.phone) : undefined;
+          const v =
+            ten.length === 10 && ten !== meTen
+              ? {
+                  id: found?.id || `u-vaani-${ten}`,
+                  name: (c.name || found?.shop || "").trim() || `Shop ${ten}`,
+                  shop: (c.name || found?.shop || "").trim() || `Shop ${ten}`,
+                  phone: formatInPhone(ten),
+                  city: "",
+                  industry: found?.industry || "grocery",
+                  catalog: found?.catalog || [],
+                  altPhones: [ten],
+                }
+              : undefined;
           return (
             <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
@@ -189,7 +217,9 @@ export function CustomerHome() {
                   {v ? ` · ${tradeLabel(v.industry)}` : ""}
                 </p>
               </div>
-              {v ? (
+              {ten === meTen ? (
+                <span className="text-xs text-subtle">{t("yourShop")}</span>
+              ) : v ? (
                 <Button
                   type="button"
                   size="sm"
@@ -198,6 +228,10 @@ export function CustomerHome() {
                     const ten = readLoginTen();
                     if (ten.length === 10) rememberLoginTen(ten);
                     keepSession();
+                    const live = useVaani.getState().liveVendors;
+                    if (!live.some((row) => row.id === v.id)) {
+                      setLiveVendors([...live, v]);
+                    }
                     setRole("customer");
                     setCallVendorId(v.id);
                   }}
@@ -262,7 +296,14 @@ export function CustomerHome() {
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{g.label}</p>
                     <ul className="space-y-2">
                       {g.tickets.map((row) => {
-                        const vend = vendorById(row.vendorId);
+                        const byPhone = row.vendorPhone ? vendorForPhone(row.vendorPhone) : undefined;
+                        const vend = byPhone || vendorById(row.vendorId);
+                        const vTen = (row.vendorPhone || vend?.phone || "").replace(/\D/g, "").slice(-10);
+                        let title = vend?.shop || vend?.name || row.vendorShop || t("vendor");
+                        if (vTen && vTen !== meTen && title === (customerName || "").trim()) {
+                          title = `Shop ${vTen}`;
+                        }
+                        const phone = vend?.phone || row.vendorPhone || "";
                         return (
                           <li key={row.id}>
                             <Link
@@ -271,10 +312,13 @@ export function CustomerHome() {
                               className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-line bg-surface px-4 py-4"
                               onClick={() => void navigate({ to: "/ticket/$ticketId", params: { ticketId: row.id } })}
                             >
-                              <div className="min-w-0">
-                                <p className="truncate font-medium">{vend?.shop ?? row.customerName}</p>
+                             <div className="min-w-0">
+                                <p className="truncate font-medium">{title}</p>
                                 <p className="truncate text-xs text-muted">
-                                  {t("linesCount", { n: row.lines.length })} · {new Date(row.createdAt).toLocaleString(locale)}
+                                  {t("linesCount", { n: row.lines.length })}
+                                  {phone ? ` · ${phone}` : ""}
+                                  {" · "}
+                                  {new Date(row.createdAt).toLocaleString(locale)}
                                 </p>
                               </div>
                               <StatusPill status={row.status} />
