@@ -7,7 +7,7 @@ import { getTicket, saveTicket } from "@/lib/vaani/account";
 import { composeOrderCopy } from "@/lib/vaani/ai";
 import { useT } from "@/lib/vaani/i18n";
 import { mergeOneTicket, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
-import type { LineItem, LineKind, Ticket, TicketStatus } from "@/lib/vaani/types";
+import type { LineItem, Ticket, TicketStatus } from "@/lib/vaani/types";
 
 export const Route = createFileRoute("/ticket/$ticketId")({ component: TicketPage });
 
@@ -19,22 +19,6 @@ function ticketStatusFromLines(lines: LineItem[]): TicketStatus {
   if (lines.length > 0 && lines.every((l) => l.status === "rejected")) return "rejected";
   if (accepted && rejected) return "partial";
   return "confirmed";
-}
-
-function blankLine(kind: LineKind): LineItem {
-  return {
-    id: crypto.randomUUID(),
-    kind,
-    raw: "",
-    productName: "",
-    catalogId: null,
-    quantity: kind === "order" ? 1 : null,
-    unit: "piece",
-    status: "pending",
-    quotedPrice: null,
-    rejectReason: null,
-    confidence: 1,
-  };
 }
 
 function TicketPage() {
@@ -150,23 +134,6 @@ function TicketPage() {
     if (res && "ok" in res && res.ok === false) setErr(t("couldNotSave"));
   }
 
-  async function applyLines(lines: LineItem[]) {
-    const status = ticketStatusFromLines(lines);
-    updateLines(ticket.id, lines, status);
-    const res = await persist({ ...ticket, lines, status });
-    if (res && "ok" in res && res.ok === false) setErr(t("couldNotSave"));
-  }
-
-  async function addLine(kind: LineKind) {
-    if (locked || busy) return;
-    await applyLines([...ticket.lines, blankLine(kind)]);
-  }
-
-  async function removeLine(i: number) {
-    if (locked || busy) return;
-    await applyLines(ticket.lines.filter((_, idx) => idx !== i));
-  }
-
   async function finalize() {
     setBusy(true);
     setErr(null);
@@ -236,45 +203,8 @@ function TicketPage() {
                   <StatusPill status={line.status} />
                 </div>
               </div>
-              {role === "vendor" && !locked ? (
-                <input
-                  className="mt-2 h-11 w-full rounded-[var(--radius-sm)] border border-line bg-bg px-3 text-sm"
-                  value={line.productName}
-                  onChange={(e) => {
-                    const lines = ticket.lines.map((l, idx) => (idx === i ? { ...l, productName: e.target.value } : l));
-                    updateLines(ticket.id, lines, ticket.status);
-                  }}
-                  onBlur={() => {
-                    const cur =
-                      useVaani.getState().incoming.find((row) => row.id === ticket.id) ??
-                      useVaani.getState().tickets.find((row) => row.id === ticket.id);
-                    if (cur) void applyLines(cur.lines);
-                  }}
-                />
-              ) : (
-                <p className="mt-2 font-medium">{line.productName}</p>
-              )}
-              {role === "vendor" && !locked && line.kind === "order" ? (
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className="mt-2 h-10 w-32 rounded-[var(--radius-sm)] border border-line bg-bg px-3 text-sm"
-                  value={line.quantity ?? ""}
-                  onChange={(e) => {
-                    const quantity = e.target.value === "" ? null : Number(e.target.value);
-                    const lines = ticket.lines.map((l, idx) => (idx === i ? { ...l, quantity } : l));
-                    updateLines(ticket.id, lines, ticket.status);
-                  }}
-                  onBlur={() => {
-                    const cur =
-                      useVaani.getState().incoming.find((row) => row.id === ticket.id) ??
-                      useVaani.getState().tickets.find((row) => row.id === ticket.id);
-                    if (cur) void applyLines(cur.lines);
-                  }}
-                />
-              ) : (
-                <p className="text-sm text-muted">{qtyLabel(line)}</p>
-              )}
+              <p className="mt-2 font-medium">{line.productName}</p>
+              <p className="text-sm text-muted">{qtyLabel(line)}</p>
               {line.quotedPrice != null ? (
                 <p className="mt-1 text-sm">{t("quotedAt", { price: line.quotedPrice, unit: line.unit })}</p>
               ) : null}
@@ -287,7 +217,6 @@ function TicketPage() {
                   onAccept={() => void patch(i, { status: "accepted", rejectReason: null, quotedPrice: null })}
                   onReject={() => void patch(i, { status: "rejected" })}
                   onQuote={(price) => void patch(i, { status: "quoted", quotedPrice: price, rejectReason: null })}
-                  onRemove={() => void removeLine(i)}
                 />
               ) : null}
 
@@ -310,17 +239,6 @@ function TicketPage() {
           );
         })}
       </ul>
-
-      {role === "vendor" && !locked ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => void addLine("order")}>
-            {t("addOrderLine")}
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => void addLine("inquiry")}>
-            {t("addInquiryLine")}
-          </Button>
-        </div>
-      ) : null}
 
       {role === "vendor" && pending && !locked ? (
         <p className="mt-4 text-sm text-muted">{t("acceptOrReject")}</p>
@@ -381,14 +299,12 @@ function VendorActions({
   onAccept,
   onReject,
   onQuote,
-  onRemove,
 }: {
   line: LineItem;
   busy: boolean;
   onAccept: () => void;
   onReject: () => void;
   onQuote: (price: number) => void;
-  onRemove: () => void;
 }) {
   const [price, setPrice] = useState(line.quotedPrice != null ? String(line.quotedPrice) : "");
   const { t } = useT();
@@ -424,9 +340,6 @@ function VendorActions({
           </Button>
         </div>
       )}
-      <button type="button" className="self-start text-xs text-danger" disabled={busy} onClick={onRemove}>
-        {t("removeLine")}
-      </button>
     </div>
   );
 }
