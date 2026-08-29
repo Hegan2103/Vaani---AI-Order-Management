@@ -14,7 +14,7 @@ import { ShopCard } from "@/components/shop-card";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, liveLoginTen, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, shopNameForTen, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { listedVendors, liveLoginTen, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -197,18 +197,16 @@ export function CustomerHome() {
           const found = ten.length === 10 ? vendorForPhone(c.phone) : undefined;
           const v =
             ten.length === 10 && ten !== meTen
-              ? found && phoneDigits(found.phone) !== meTen
-                ? { ...found, phone: formatInPhone(ten), altPhones: [...(found.altPhones ?? []), ten] }
-                : {
-                    id: found?.id || `u-vaani-${ten}`,
-                    name: (c.name || found?.name || "").trim() || `Shop ${ten}`,
-                    shop: (c.name || found?.shop || "").trim() || `Shop ${ten}`,
-                    phone: formatInPhone(ten),
-                    city: "",
-                    industry: found?.industry || "grocery",
-                    catalog: found?.catalog || [],
-                    altPhones: [ten],
-                  }
+              ? {
+                  id: found?.id || `u-vaani-${ten}`,
+                  name: (c.name || found?.shop || "").trim() || `Shop ${ten}`,
+                  shop: (c.name || found?.shop || "").trim() || `Shop ${ten}`,
+                  phone: formatInPhone(ten),
+                  city: "",
+                  industry: found?.industry || "grocery",
+                  catalog: found?.catalog || [],
+                  altPhones: [ten],
+                }
               : undefined;
           return (
             <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
@@ -282,13 +280,12 @@ export function CustomerHome() {
         </div>
       )}
 
-      {tickets.filter((row) => phoneDigits(row.customerPhone) === meTen || !row.customerPhone).length > 0 ? (
+      {tickets.length > 0 ? (
         <section className="mt-10">
           <h2 className="mb-3 font-display text-2xl tracking-tight">{t("yourRequests")}</h2>
           <OrderDateFilter value={dateFilter} onChange={setDateFilter} />
           {(() => {
-            const mine = tickets.filter((row) => !meTen || phoneDigits(row.customerPhone) === meTen);
-            const rows = filterByDate(mine, dateFilter);
+            const rows = filterByDate(tickets, dateFilter);
             if (rows.length === 0) {
               return <p className="text-sm text-muted">{t("noOrdersDates")}</p>;
             }
@@ -301,10 +298,10 @@ export function CustomerHome() {
                       {g.tickets.map((row) => {
                         const byPhone = row.vendorPhone ? vendorForPhone(row.vendorPhone) : undefined;
                         const vend = byPhone || vendorById(row.vendorId);
-                        const vTen = phoneDigits(row.vendorPhone || vend?.phone || "");
+                        const vTen = (row.vendorPhone || vend?.phone || "").replace(/\D/g, "").slice(-10);
                         let title = vend?.shop || vend?.name || row.vendorShop || t("vendor");
                         if (vTen && vTen !== meTen && title === (customerName || "").trim()) {
-                          title = shopNameForTen(vTen, vTen ? `Shop ${vTen}` : t("vendor"));
+                          title = `Shop ${vTen}`;
                         }
                         const phone = vend?.phone || row.vendorPhone || "";
                         return (
@@ -315,7 +312,7 @@ export function CustomerHome() {
                               className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-line bg-surface px-4 py-4"
                               onClick={() => void navigate({ to: "/ticket/$ticketId", params: { ticketId: row.id } })}
                             >
-                              <div className="min-w-0">
+                             <div className="min-w-0">
                                 <p className="truncate font-medium">{title}</p>
                                 <p className="truncate text-xs text-muted">
                                   {t("linesCount", { n: row.lines.length })}

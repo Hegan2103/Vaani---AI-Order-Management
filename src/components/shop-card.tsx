@@ -72,7 +72,6 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const [langDraft, setLangDraft] = useState(LOCKED?.language || "en-IN");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   const loginTen = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone || "");
-
   useLayoutEffect(() => {
     const load = () => {
       const next = pullIdentity();

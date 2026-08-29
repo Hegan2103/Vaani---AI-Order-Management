@@ -11,7 +11,6 @@ const DIR_KEY = "vaani-dir-contacts";
 const DIR_FLAG = "vaani-dir-pulled";
 const LISTED_KEY = "vaani-listed-vendors-v1";
 const LANG_KEY = "vaani-ui-language";
-const INBOX_KEY = "vaani-inbox-v1";
 
 export function purgeStaleClientCache() {
   return false;
@@ -302,6 +301,8 @@ export function readShopIdentity(phone?: string): ShopIdentity | null {
     if (!keyed) return null;
     const p = JSON.parse(keyed) as ShopIdentity;
     if (!p?.shopName?.trim()) return null;
+    const storedTen = phoneDigits(p.phone);
+    if (storedTen.length === 10 && storedTen !== ten) return null;
     return { ...p, phone: formatInPhone(ten) };
   } catch {
     return null;
@@ -368,6 +369,8 @@ export function writeShopIdentity(p: ShopIdentity) {
   try {
     const ten = liveLoginTen() || readLoginTen() || phoneDigits(p.phone);
     if (ten.length !== 10) return;
+    const storedTen = phoneDigits(p.phone);
+    if (storedTen.length === 10 && storedTen !== ten) return;
     const clean: ShopIdentity = { ...p, phone: formatInPhone(ten) };
     const raw = JSON.stringify(clean);
     sessionStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
@@ -377,7 +380,6 @@ export function writeShopIdentity(p: ShopIdentity) {
     /* ignore */
   }
 }
-
 function vendorFromListing(ten: string, shop: string, industry: Industry | "", name?: string): Vendor {
   const formatted = formatInPhone(ten);
   const title = shop.trim() || name?.trim() || `Shop ${ten}`;
@@ -452,7 +454,7 @@ export function listedVendors(): Vendor[] {
       const p = JSON.parse(raw) as ShopIdentity;
       const keyTen = phoneDigits(key.slice(SHOP_KEY.length + 1));
       const stored = phoneDigits(p.phone);
-      if (keyTen.length !== 10 || stored.length === 10 && stored !== keyTen) continue;
+      if (keyTen.length !== 10 || (stored.length === 10 && stored !== keyTen)) continue;
       if (!p.shopName?.trim()) continue;
       put(keyTen, p.shopName, p.industry);
     }
@@ -480,7 +482,6 @@ export function listedVendors(): Vendor[] {
   }
   return [...byTen.values()];
 }
-
 export function restoreLocalAccount(phone?: string) {
   if (typeof window === "undefined") return false;
   const ten = phoneDigits(phone || liveLoginTen() || readLoginTen());
@@ -584,7 +585,7 @@ export function vendorById(id: string) {
   } catch {
     /* ignore */
   }
-  const listed = listedVendors().find((v) => v.id === id);
+ const listed = listedVendors().find((v) => v.id === id);
   if (listed) return listed;
   const ten = String(id).match(/(\d{10})/)?.[1] || "";
   return ten ? vendorForPhone(ten) : undefined;
@@ -605,10 +606,7 @@ export function vendorForPhone(phone: string) {
     /* ignore */
   }
   const listed = listedVendors().find(
-    (v) =>
-      phonesMatch(v.phone, phone) ||
-      (v.altPhones ?? []).some((p) => phonesMatch(p, phone)) ||
-      String(v.id).includes(ten),
+    (v) => phonesMatch(v.phone, phone) || (v.altPhones ?? []).some((p) => phonesMatch(p, phone)),
   );
   if (listed) return listed;
   try {
@@ -668,59 +666,43 @@ function relink(contacts: Contact[], live: Vendor[]): Contact[] {
     return hit ? { ...c, vendorId: hit.id } : c;
   });
 }
-
-export function isOwnCustomerOrder(ticket: Ticket, phone: string) {
-  const ten = phoneDigits(phone);
-  if (!ten) return false;
-  return phoneDigits(ticket.customerPhone) === ten;
-}
-
 export function shopNameForTen(ten: string, fallback = "") {
-  const t = phoneDigits(ten);
+  const t = String(ten || "").replace(/\D/g, "").slice(-10);
   if (t.length !== 10) return fallback;
   try {
-    const pin = JSON.parse(localStorage.getItem(`vaani-shop-locked:${t}`) || "null") as ShopIdentity | null;
+    const pin = JSON.parse(localStorage.getItem(`vaani-shop-locked:${t}`) || "null");
     if (pin?.shopName?.trim()) {
-      const stored = phoneDigits(pin.phone);
+      const stored = String(pin.phone || "").replace(/\D/g, "").slice(-10);
       if (!stored || stored === t) return pin.shopName.trim();
     }
   } catch {
     /* ignore */
   }
-  const me = liveLoginTen() || readLoginTen();
-  const myName = (useVaani.getState().customerName || "").trim();
-  const listed = listedVendors().find((v) => phoneDigits(v.phone) === t);
-  if (listed?.shop?.trim() && !(t !== me && listed.shop.trim() === myName)) {
-    return listed.shop.trim();
-  }
   return fallback || `Shop ${t}`;
 }
 
-export function readVendorInbox(ten: string): Ticket[] {
-  if (typeof window === "undefined") return [];
-  const t = phoneDigits(ten);
+export function readVendorInbox(ten: string) {
+  const t = String(ten || "").replace(/\D/g, "").slice(-10);
   if (t.length !== 10) return [];
   try {
-    const all = JSON.parse(localStorage.getItem(INBOX_KEY) || "{}") as Record<string, Ticket[]>;
+    const all = JSON.parse(localStorage.getItem("vaani-inbox-v1") || "{}");
     return Array.isArray(all[t]) ? all[t] : [];
   } catch {
     return [];
   }
 }
-
 export function pushIncomingToVendor(vendorPhone: string, vendorId: string, ticket: Ticket) {
   if (typeof window === "undefined") return;
   const ten = phoneDigits(vendorPhone) || String(vendorId).match(/(\d{10})/)?.[1] || "";
   if (ten.length !== 10) return;
-  try {
-    const box = JSON.parse(localStorage.getItem(INBOX_KEY) || "{}") as Record<string, Ticket[]>;
-    box[ten] = mergeTicketLists(box[ten] || [], [ticket]);
-    localStorage.setItem(INBOX_KEY, JSON.stringify(box));
-    sessionStorage.setItem(INBOX_KEY, JSON.stringify(box));
+try {
+    const box = JSON.parse(localStorage.getItem("vaani-inbox-v1") || "{}");
+    const prev = Array.isArray(box[ten]) ? box[ten] : [];
+    box[ten] = [ticket, ...prev.filter((x: { id: string }) => x.id !== ticket.id)];
+    localStorage.setItem("vaani-inbox-v1", JSON.stringify(box));
   } catch {
     /* ignore */
-  }
-  try {
+  }  try {
     const all = JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}") as Record<string, AccountBackup>;
     const prev = all[ten] || {
       shopName: "",
@@ -750,6 +732,11 @@ export function pushIncomingToVendor(vendorPhone: string, vendorId: string, tick
   }
   const me = phoneDigits(useVaani.getState().customerPhone) || readLoginTen();
   if (me === ten) useVaani.getState().upsertIncoming(ticket);
+}
+export function isOwnCustomerOrder(ticket: Ticket, phone: string) {
+  const ten = phoneDigits(phone);
+  if (!ten) return false;
+  return phoneDigits(ticket.customerPhone) === ten;
 }
 
 export function readLastTicket(): Ticket | null {

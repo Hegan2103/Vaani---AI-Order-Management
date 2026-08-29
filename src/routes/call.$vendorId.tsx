@@ -8,7 +8,7 @@ import { parseVoiceOrder } from "@/lib/vaani/ai";
 import { fallbackParse } from "@/lib/vaani/match";
 import { LANGUAGES, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { findOpenTicket, liveLoginTen, pushIncomingToVendor, readLoginTen, shopNameForTen, useVaani, vendorById } from "@/lib/vaani/store";
+import { findOpenTicket, liveLoginTen, pushIncomingToVendor, readLoginTen, useVaani, vendorById } from "@/lib/vaani/store";
 import type { LineItem, Ticket } from "@/lib/vaani/types";
 
 export const Route = createFileRoute("/call/$vendorId")({ component: CallRoute });
@@ -212,9 +212,9 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
     }
     const orderPhone = formatInPhone(loginTen || customerPhone);
     const vendorShop =
-      shopNameForTen(vendorTen, vendor.shop) === (customerName || "").trim() && vendorTen !== loginTen
+      vendorTen !== loginTen && vendor.shop === (customerName || "").trim()
         ? `Shop ${vendorTen}`
-        : shopNameForTen(vendorTen, vendor.shop);
+        : vendor.shop;
     const vendorPhone = formatInPhone(vendorTen || vendor.phone);
     const open = findOpenTicket(vendor.id);
     if (open) {
@@ -244,7 +244,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       id: crypto.randomUUID(),
       vendorId: vendor.id,
       vendorShop,
-      vendorPhone,
+        vendorPhone,
       customerName: customerName || "Shop",
       customerPhone: orderPhone,
       language: language || "en-IN",

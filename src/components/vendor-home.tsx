@@ -1,3 +1,5 @@
+import { listIncomingTickets } from "@/lib/vaani/account";
+import { inboxIdForUser } from "@/lib/vaani/seed";
 import { Link } from "@tanstack/react-router";
 import { Inbox } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -10,8 +12,6 @@ import {
   type DateFilter,
 } from "@/components/order-date-filter";
 import { ShopCard } from "@/components/shop-card";
-import { listIncomingTickets } from "@/lib/vaani/account";
-import { inboxIdForUser } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
 import { mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
@@ -24,13 +24,12 @@ export function VendorHome() {
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
- const ten = liveLoginTen() || readLoginTen() || String(customerPhone || "").replace(/\D/g, "").slice(-10);
+ const ten = (liveLoginTen?.() || String(customerPhone || "").replace(/\D/g, "").slice(-10));
   const snap = readShopIdentity(ten);
   const shopName = snap?.shopName || "";
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
-  const inbox = incoming.filter((t) => !isOwnCustomerOrder(t, ten));
-
+  const inbox = incoming.filter((t) => !isOwnCustomerOrder(t, customerPhone));
   useEffect(() => {
     if (ten.length !== 10) return;
     const local = mergeTicketLists(readVendorInbox(ten), readAccountBackup(ten)?.incoming ?? []);
@@ -61,7 +60,20 @@ export function VendorHome() {
         <ShopCard />
       </div>
 
-      {inbox.length > 0 ? (
+      {inbox.length === 0 && (!shopName || !shopIndustry || !listed) ? (
+        <div className="rounded-[var(--radius-xl)] border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
+          <p className="font-medium">{t("listYourself")}</p>
+          <p className="mt-1 text-sm text-muted">{t("listYourselfHint")}</p>
+        </div>
+      ) : inbox.length === 0 ? (
+        <div className="rounded-[var(--radius-xl)] border border-dashed border-line-strong bg-surface px-6 py-16 text-center">
+          <Inbox className="mx-auto size-8 text-subtle" />
+          <p className="mt-3 font-medium">{t("noIncoming")}</p>
+          <p className="mt-1 text-sm text-muted">
+            {t("noIncomingHint", { industry: tradeLabel(shopIndustry), shop: shopName })}
+          </p>
+        </div>
+      ) : (
         <div>
           <h2 className="mb-3 font-display text-2xl tracking-tight">{t("incomingLists")}</h2>
           <OrderDateFilter value={dateFilter} onChange={setDateFilter} />
@@ -108,19 +120,6 @@ export function VendorHome() {
               </div>
             );
           })()}
-        </div>
-      ) : !shopName || !shopIndustry || !listed ? (
-        <div className="rounded-[var(--radius-xl)] border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
-          <p className="font-medium">{t("listYourself")}</p>
-          <p className="mt-1 text-sm text-muted">{t("listYourselfHint")}</p>
-        </div>
-      ) : (
-        <div className="rounded-[var(--radius-xl)] border border-dashed border-line-strong bg-surface px-6 py-16 text-center">
-          <Inbox className="mx-auto size-8 text-subtle" />
-          <p className="mt-3 font-medium">{t("noIncoming")}</p>
-          <p className="mt-1 text-sm text-muted">
-            {t("noIncomingHint", { industry: tradeLabel(shopIndustry), shop: shopName })}
-          </p>
         </div>
       )}
     </>
