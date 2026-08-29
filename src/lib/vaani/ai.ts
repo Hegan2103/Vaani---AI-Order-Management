@@ -93,6 +93,7 @@ Rules:
 - kind "order" when they want stock (product + quantity).
 - kind "inquiry" when they ask rate/price/cost/kitna/daam.
 - Keep quantity on inquiries too.
+- Units include case/cases, box, strip, kg, bag, piece, bottle, tin, pack. If they said "8 case" quantity is 8 and unit is "case".
 - catalogId is always null.
 - raw MUST be a contiguous quote from the utterance.
 - productName MUST also appear inside the utterance.

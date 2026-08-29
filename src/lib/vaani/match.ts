@@ -4,7 +4,7 @@ const INQUIRY_WORDS =
   /\b(rate|price|cost|kitna|kitne|kitni|daam|bhao|भाव|कीमत|रेट|price of|ka rate|ka price|ka cost|enq|inquiry|quote)\b/i;
 
 const UNIT =
-  "kg|kilo|kilogram|bag|bags|strip|strips|litre|liter|ltr|metre|meter|mtr|piece|pcs|pc|box|boxes|sachet|bottle|bundle|cft|gram|gm|ml|pack|packs|unit|units|tin|tins";
+  "kg|kilo|kilogram|bag|bags|strip|strips|litre|liter|ltr|metre|meter|mtr|piece|pcs|pc|box|boxes|case|cases|carton|cartons|sachet|bottle|bundle|cft|gram|gm|ml|pack|packs|unit|units|tin|tins|केस";
 
 export function inferKind(text: string): LineKind {
   return INQUIRY_WORDS.test(text) ? "inquiry" : "order";
@@ -29,7 +29,23 @@ function parseChunk(chunk: string): LineItem {
       : kind === "inquiry"
         ? null
         : 1;
-  const unit = (qtyMatch?.[2] || "unit").toLowerCase();
+  const unitRaw = (qtyMatch?.[2] || "unit").toLowerCase();
+  const unit =
+    unitRaw === "cases" || unitRaw === "केस" || unitRaw === "carton" || unitRaw === "cartons"
+      ? "case"
+      : unitRaw === "boxes"
+        ? "box"
+        : unitRaw === "strips"
+          ? "strip"
+          : unitRaw === "bags"
+            ? "bag"
+            : unitRaw === "packs"
+              ? "pack"
+              : unitRaw === "tins"
+                ? "tin"
+                : unitRaw === "pcs" || unitRaw === "pc"
+                  ? "piece"
+                  : unitRaw;
   const qtyText = qtyMatch?.[0] || (trailingQty && quantity === Number(trailingQty[1]) ? trailingQty[0] : "");
   return {
     id: crypto.randomUUID(),
