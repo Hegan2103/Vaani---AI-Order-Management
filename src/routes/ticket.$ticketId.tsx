@@ -117,13 +117,17 @@ function TicketPage() {
     setActing(line.id);
     setErr(null);
     const lines = ticket.lines.map((l, idx) => (idx === i ? { ...l, ...part } : l));
+    const accepted = lines.some((l) => l.status === "accepted" || l.status === "confirmed");
+    const rejected = lines.some((l) => l.status === "rejected");
     const status = lines.some((l) => l.status === "quoted")
       ? "quoted"
       : lines.some((l) => l.status === "pending")
         ? "reviewing"
         : lines.length > 0 && lines.every((l) => l.status === "rejected")
           ? "rejected"
-          : "confirmed";
+          : accepted && rejected
+            ? "partial"
+            : "confirmed";
     updateLines(ticket.id, lines, status);
     const res = await persist({ ...ticket, lines, status });
     setActing(null);

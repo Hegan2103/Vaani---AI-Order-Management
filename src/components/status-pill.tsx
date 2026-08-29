@@ -10,6 +10,7 @@ export function StatusPill({ status }: { status: string }) {
     quoted: "text-accent border-line",
     accepted: "text-ok border-line",
     confirmed: "text-ok border-line",
+    partial: "text-warn border-line",
     finalized: "text-ok border-line",
     delivered: "text-ok border-line",
     rejected: "text-danger border-line",
