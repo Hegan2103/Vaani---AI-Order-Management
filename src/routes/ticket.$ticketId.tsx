@@ -121,7 +121,9 @@ function TicketPage() {
       ? "quoted"
       : lines.some((l) => l.status === "pending")
         ? "reviewing"
-        : "confirmed";
+        : lines.length > 0 && lines.every((l) => l.status === "rejected")
+          ? "rejected"
+          : "confirmed";
     updateLines(ticket.id, lines, status);
     const res = await persist({ ...ticket, lines, status });
     setActing(null);

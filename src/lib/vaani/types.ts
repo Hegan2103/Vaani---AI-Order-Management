@@ -23,6 +23,7 @@ export type TicketStatus =
   | "reviewing"
   | "quoted"
   | "confirmed"
+  | "rejected"
   | "finalized"
   | "delivered";
 

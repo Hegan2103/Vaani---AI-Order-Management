@@ -1061,6 +1061,7 @@ const TICKET_RANK: Record<string, number> = {
   reviewing: 2,
   quoted: 3,
   confirmed: 4,
+  rejected: 4,
   finalized: 5,
   delivered: 6,
 };
