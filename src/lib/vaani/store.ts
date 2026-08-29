@@ -567,6 +567,7 @@ type State = {
   setLiveVendors: (vendors: Vendor[]) => void;
   mergeContacts: (extra: Contact[]) => void;
   upsertTicket: (ticket: Ticket) => void;
+  removeTicket: (ticketId: string) => void;
   upsertIncoming: (ticket: Ticket) => void;
   replaceTickets: (tickets: Ticket[]) => void;
   replaceIncoming: (tickets: Ticket[]) => void;
@@ -886,6 +887,13 @@ export const useVaani = create<State>()(
           tickets[i] = mergeOneTicket(tickets[i], ticket);
           return { tickets };
         });
+        queueMicrotask(() => writeAccountBackup());
+      },
+      removeTicket: (ticketId) => {
+        set((s) => ({
+          tickets: s.tickets.filter((t) => t.id !== ticketId),
+          incoming: s.incoming.filter((t) => t.id !== ticketId),
+        }));
         queueMicrotask(() => writeAccountBackup());
       },
       upsertIncoming: (ticket) => {

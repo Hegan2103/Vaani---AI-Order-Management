@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { BookUser, Mic, Phone } from "lucide-react";
+import { BookUser, Mic, Phone, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { StatusPill } from "@/components/status-pill";
 import {
@@ -23,6 +23,7 @@ export function CustomerHome() {
   const setCallVendorId = useVaani((s) => s.setCallVendorId);
   const contacts = useVaani((s) => s.contacts);
   const tickets = useVaani((s) => s.tickets);
+  const removeTicket = useVaani((s) => s.removeTicket);
   const customerName = useVaani((s) => s.customerName);
   const customerPhone = useVaani((s) => s.customerPhone);
   const mergeContacts = useVaani((s) => s.mergeContacts);
@@ -305,11 +306,11 @@ export function CustomerHome() {
                         }
                         const phone = vend?.phone || row.vendorPhone || "";
                         return (
-                          <li key={row.id}>
+                          <li key={row.id} className="flex items-center gap-2">
                             <Link
                               to="/ticket/$ticketId"
                               params={{ ticketId: row.id }}
-                              className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-line bg-surface px-4 py-4"
+                              className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-line bg-surface px-4 py-4"
                               onClick={() => void navigate({ to: "/ticket/$ticketId", params: { ticketId: row.id } })}
                             >
                              <div className="min-w-0">
@@ -323,6 +324,20 @@ export function CustomerHome() {
                               </div>
                               <StatusPill status={row.status} />
                             </Link>
+                            {row.status === "draft" ? (
+                              <button
+                                type="button"
+                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-danger"
+                                aria-label={t("deleteDraft")}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  removeTicket(row.id);
+                                }}
+                              >
+                                <Trash2 className="size-4" />
+                              </button>
+                            ) : null}
                           </li>
                         );
                       })}

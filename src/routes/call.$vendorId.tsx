@@ -29,6 +29,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
   const language = useVaani((s) => s.language);
   const { t, industry: tradeLabel } = useT();
   const upsertTicket = useVaani((s) => s.upsertTicket);
+  const removeTicket = useVaani((s) => s.removeTicket);
   const setCallVendorId = useVaani((s) => s.setCallVendorId);
 
   const [phase, setPhase] = useState<"idle" | "countdown" | "recording" | "parsing" | "review">("idle");
@@ -48,6 +49,53 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
   const sessionRef = useRef(0);
   const vendorRef = useRef(found);
   vendorRef.current = found;
+  const draftIdRef = useRef("");
+
+  function persistDraft(nextLines: LineItem[], nextTranscript: string) {
+    const vendor = vendorRef.current;
+    if (!vendor || !nextLines.length) return;
+    const loginTen = liveLoginTen() || readLoginTen();
+    const vendorTen = phoneDigits(vendor.phone) || String(vendor.id).match(/(\d{10})/)?.[1] || "";
+    const existing =
+      useVaani.getState().tickets.find((t) => t.id === draftIdRef.current) ||
+      useVaani.getState().tickets.find((t) => t.vendorId === vendor.id && t.status === "draft");
+    const id = existing?.id || draftIdRef.current || crypto.randomUUID();
+    draftIdRef.current = id;
+    const ticket: Ticket = {
+      id,
+      vendorId: vendor.id,
+      vendorShop: vendor.shop,
+      vendorPhone: formatInPhone(vendorTen || vendor.phone),
+      customerName: customerName || "Shop",
+      customerPhone: formatInPhone(loginTen || customerPhone),
+      language: language || "en-IN",
+      transcript: nextTranscript,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      status: "draft",
+      lines: nextLines,
+      orderCopy: null,
+      notes: existing?.notes || "",
+      updatedAt: new Date().toISOString(),
+    };
+    upsertTicket(ticket);
+  }
+
+  useEffect(() => {
+    const vendor = vendorRef.current;
+    if (!vendor) return;
+    const draft = useVaani.getState().tickets.find((t) => t.vendorId === vendor.id && t.status === "draft");
+    if (!draft?.lines.length) return;
+    draftIdRef.current = draft.id;
+    setLines(draft.lines);
+    setTranscript(draft.transcript);
+    transcriptRef.current = draft.transcript;
+    setPhase("review");
+  }, [vendorId]);
+
+  useEffect(() => {
+    if (phase !== "review" || !lines.length) return;
+    persistDraft(lines, transcriptRef.current || transcript);
+  }, [lines, phase, transcript]);
 
   async function startRec() {
     const vendor = vendorRef.current;
@@ -154,6 +202,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       transcriptRef.current = spoken;
       setLines(localLines);
       setPhase("review");
+      persistDraft(localLines, spoken);
       queueMicrotask(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
     try {
@@ -181,6 +230,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       setLines(fallbackParse(text));
       setWarning("warning" in result ? (result.warning ?? null) : null);
       setPhase("review");
+      persistDraft(fallbackParse(text), text);
       queueMicrotask(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (err) {
       if (localLines.length) {
@@ -216,6 +266,64 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
         ? `Shop ${vendorTen}`
         : vendor.shop;
     const vendorPhone = formatInPhone(vendorTen || vendor.phone);
+    const tickets = useVaani.getState().tickets;
+    const draft =
+      tickets.find((t) => t.id === draftIdRef.current && t.status === "draft") ||
+      tickets.find((t) => t.vendorId === vendor.id && t.status === "draft");
+    const openSent = tickets.find(
+      (t) =>
+        t.vendorId === vendor.id &&
+        t.status !== "draft" &&
+        t.status !== "finalized" &&
+        t.status !== "delivered",
+    );
+    if (openSent) {
+      const next: Ticket = {
+        ...openSent,
+        vendorId: vendor.id,
+        vendorShop,
+        vendorPhone,
+        transcript: [openSent.transcript, transcript].filter(Boolean).join("\n"),
+        lines: [...openSent.lines, ...lines],
+        status: openSent.lines.some((l) => l.status !== "pending") ? "reviewing" : "sent",
+        orderCopy: null,
+        updatedAt: new Date().toISOString(),
+      };
+      upsertTicket(next);
+      if (draft) removeTicket(draft.id);
+      pushIncomingToVendor(vendorPhone || vendorTen, vendor.id, next);
+      setCallVendorId("");
+      try {
+        await saveTicket({ data: { ticket: next } });
+      } catch {
+        /* local copy still held */
+      }
+      void navigate({ to: "/ticket/$ticketId", params: { ticketId: next.id } });
+      return;
+    }
+    if (draft) {
+      const next: Ticket = {
+        ...draft,
+        vendorId: vendor.id,
+        vendorShop,
+        vendorPhone,
+        transcript,
+        lines,
+        status: "sent",
+        orderCopy: null,
+        updatedAt: new Date().toISOString(),
+      };
+      upsertTicket(next);
+      pushIncomingToVendor(vendorPhone || vendorTen, vendor.id, next);
+      setCallVendorId("");
+      try {
+        await saveTicket({ data: { ticket: next } });
+      } catch {
+        /* local copy still held */
+      }
+      void navigate({ to: "/ticket/$ticketId", params: { ticketId: next.id } });
+      return;
+    }
     const open = findOpenTicket(vendor.id);
     if (open) {
       const next: Ticket = {

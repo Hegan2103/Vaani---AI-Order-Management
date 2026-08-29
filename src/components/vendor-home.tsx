@@ -29,7 +29,7 @@ export function VendorHome() {
   const shopName = snap?.shopName || "";
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
-  const inbox = incoming.filter((t) => !isOwnCustomerOrder(t, customerPhone));
+  const inbox = incoming.filter((t) => t.status !== "draft" && !isOwnCustomerOrder(t, customerPhone));
   useEffect(() => {
     if (ten.length !== 10) return;
     const local = mergeTicketLists(readVendorInbox(ten), readAccountBackup(ten)?.incoming ?? []);
