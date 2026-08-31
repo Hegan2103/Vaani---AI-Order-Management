@@ -398,13 +398,14 @@ export function CustomerHome() {
                         const vend = byPhone || vendorById(row.vendorId);
                         const vTen = (row.vendorPhone || vend?.phone || "").replace(/\D/g, "").slice(-10);
                         const listedName = (vend?.shop || vend?.name || "").trim();
-                        let title =
-                          listedName && listedName !== (customerName || "").trim()
-                            ? listedName
-                            : (row.vendorShop || "").trim() && row.vendorShop !== (customerName || "").trim()
-                              ? row.vendorShop
+                        let title = listedName;
+                        if (!title || title === (customerName || "").trim() || /^Shop \d{10}$/.test(title)) {
+                          const stamped = (row.vendorShop || "").trim();
+                          title =
+                            stamped && stamped !== (customerName || "").trim() && !/^Shop \d{10}$/.test(stamped)
+                              ? stamped
                               : `Shop ${vTen || ""}`;
-                        if (title === (customerName || "").trim()) title = `Shop ${vTen}`;
+                        }
                         const phone = vend?.phone || row.vendorPhone || "";
                         return (
                           <li key={row.id} className="flex items-center gap-2">

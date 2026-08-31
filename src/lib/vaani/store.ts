@@ -645,7 +645,7 @@ export function vendorForPhone(phone: string) {
   } catch {
     /* ignore */
   }
-  return vendorFromListing(ten, `Shop ${ten}`, "grocery");
+  return undefined;
 }
 
 export function onVaaniVendor(phone: string, vendorId?: string | null) {

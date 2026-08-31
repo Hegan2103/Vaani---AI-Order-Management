@@ -26,7 +26,7 @@ export function VendorHome() {
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
- const ten = (liveLoginTen?.() || String(customerPhone || "").replace(/\D/g, "").slice(-10));
+ const ten = liveLoginTen() || readLoginTen();
   const snap = readShopIdentity(ten);
   const shopName = snap?.shopName || "";
   const shopIndustry = snap?.industry || industry;

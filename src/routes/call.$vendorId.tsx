@@ -3,12 +3,12 @@ import { Mic, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
-import { saveTicket } from "@/lib/vaani/account";
+import { lookupVendorByPhone, saveTicket } from "@/lib/vaani/account";
 import { parseVoiceOrder } from "@/lib/vaani/ai";
 import { fallbackParse } from "@/lib/vaani/match";
 import { LANGUAGES, formatInPhone, inboxIdForUser, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { findOpenTicket, liveLoginTen, pushIncomingToVendor, readLoginTen, shopNameForTen, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { findOpenTicket, liveLoginTen, pushIncomingToVendor, readLoginTen, rememberListedVendor, shopNameForTen, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { LineItem, Ticket } from "@/lib/vaani/types";
 
 export const Route = createFileRoute("/call/$vendorId")({ component: CallRoute });
@@ -264,11 +264,19 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
     const listed = vendorTen.length === 10 ? vendorForPhone(vendorTen) : undefined;
     const vendorId = vendorTen.length === 10 ? inboxIdForUser(`vaani-${vendorTen}`) : vendor.id;
     const orderPhone = formatInPhone(loginTen || customerPhone);
-    const fromList = (listed?.shop || "").trim();
-    const vendorShop =
-      fromList && fromList !== (customerName || "").trim()
-        ? fromList
-        : shopNameForTen(vendorTen, `Shop ${vendorTen}`);
+    let vendorShop = (listed?.shop || "").trim();
+    try {
+      const remote = vendorTen.length === 10 ? await lookupVendorByPhone({ data: { phone: vendorTen } }) : null;
+      if (remote?.shopName) {
+        vendorShop = remote.shopName;
+        rememberListedVendor({ shopName: remote.shopName, phone: vendorTen, industry: remote.industry || listed?.industry || "" });
+      }
+    } catch {
+      /* local name */
+    }
+    if (!vendorShop || vendorShop === (customerName || "").trim() || vendorShop === `Shop ${vendorTen}`) {
+      vendorShop = shopNameForTen(vendorTen, vendorShop || `Shop ${vendorTen}`);
+    }
     const vendorPhone = formatInPhone(vendorTen || vendor.phone);
     const tickets = useVaani.getState().tickets;
     const draft =
@@ -299,9 +307,10 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       pushIncomingToVendor(vendorPhone || vendorTen, vendorId, next);
       setCallVendorId("");
       try {
-        await saveTicket({ data: { ticket: next } });
+        const saved = await saveTicket({ data: { ticket: next } });
+        if (saved && "ok" in saved && saved.ok === false) setError(saved.error || t("couldNotSave"));
       } catch {
-        /* local copy still held */
+        setError(t("couldNotSave"));
       }
       void navigate({ to: "/ticket/$ticketId", params: { ticketId: next.id } });
       return;
@@ -322,9 +331,10 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       pushIncomingToVendor(vendorPhone || vendorTen, vendorId, next);
       setCallVendorId("");
       try {
-        await saveTicket({ data: { ticket: next } });
+        const saved = await saveTicket({ data: { ticket: next } });
+        if (saved && "ok" in saved && saved.ok === false) setError(saved.error || t("couldNotSave"));
       } catch {
-        /* local copy still held */
+        setError(t("couldNotSave"));
       }
       void navigate({ to: "/ticket/$ticketId", params: { ticketId: next.id } });
       return;
@@ -346,9 +356,10 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       pushIncomingToVendor(vendorPhone || vendorTen, vendorId, next);
       setCallVendorId("");
       try {
-        await saveTicket({ data: { ticket: next } });
+        const saved = await saveTicket({ data: { ticket: next } });
+        if (saved && "ok" in saved && saved.ok === false) setError(saved.error || t("couldNotSave"));
       } catch {
-        /* local copy still held */
+        setError(t("couldNotSave"));
       }
       void navigate({ to: "/ticket/$ticketId", params: { ticketId: next.id } });
       return;
@@ -373,9 +384,10 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
     pushIncomingToVendor(vendorPhone || vendorTen, vendorId, ticket);
     setCallVendorId("");
     try {
-      await saveTicket({ data: { ticket } });
+      const saved = await saveTicket({ data: { ticket } });
+      if (saved && "ok" in saved && saved.ok === false) setError(saved.error || t("couldNotSave"));
     } catch {
-      /* local copy still held */
+      setError(t("couldNotSave"));
     }
     void navigate({ to: "/ticket/$ticketId", params: { ticketId: ticket.id } });
   }

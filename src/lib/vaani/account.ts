@@ -197,6 +197,27 @@ export const listPublicVendors = createServerFn({ method: "GET" })
       .filter((r) => r.ten.length === 10 && r.shopName);
   });
 
+export const lookupVendorByPhone = createServerFn({ method: "POST" })
+  .middleware([vaaniGate])
+  .validator((input: { phone: string }) => input)
+  .handler(async ({ data }) => {
+    const ten = digits(data.phone);
+    if (ten.length !== 10) return null;
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql.query<{ user_id: string; shop_name: string; phone: string; industry: string }>(
+      `select user_id, shop_name, phone, industry from vaani_profiles`,
+    );
+    const hit = rows.find((r) => {
+      const u = digits(String(r.user_id || "").replace(/^vaani-/, ""));
+      const p = digits(r.phone || "");
+      return u === ten || p.slice(-10) === ten;
+    });
+    const shopName = (hit?.shop_name || "").trim();
+    if (!hit || !shopName) return null;
+    return { ten, shopName, industry: (hit.industry || "") as Industry | "" };
+  });
+
 export const loadProfile = createServerFn({ method: "GET" })
   .middleware([vaaniGate])
   .handler(async ({ context }) => {
@@ -390,14 +411,16 @@ export const saveProfile = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const shopName = data.shopName.trim();
     if (!shopName) return { ok: false as const, error: "Shop name cannot be empty." };
-    if (!context.userId) return { ok: true as const, vendorId: "" };
+    const ten = digits(data.phone) || digits(String(context.userId || "").replace(/^vaani-/, ""));
+    const userId = context.userId || (ten.length === 10 ? `vaani-${ten}` : "");
+    if (!userId) return { ok: false as const, error: "Sign in again, then save shop." };
     const sql = await getSql();
     await ensureVaaniSchema(sql);
     const existing = await sql<{ phone: string }>`
-      select phone from vaani_profiles where user_id = ${context.userId}
+      select phone from vaani_profiles where user_id = ${userId}
     `;
-    const phone = data.phone.trim() || existing[0]?.phone || "";
-    const vendorId = data.isVendor ? inboxIdForUser(context.userId) : (data.vendorId ?? "");
+    const phone = data.phone.trim() || existing[0]?.phone || (ten.length === 10 ? ten : "");
+    const vendorId = data.isVendor ? inboxIdForUser(userId) : (data.vendorId ?? "");
     const industry = data.industry ?? "";
     const flag = data.isVendor ? "true" : "false";
     const language = data.language || "en-IN";
@@ -413,7 +436,7 @@ export const saveProfile = createServerFn({ method: "POST" })
            is_vendor = excluded.is_vendor,
            vendor_id = excluded.vendor_id,
            language = excluded.language`,
-        [context.userId, shopName, phone, data.role, vendorId, industry, flag, language],
+        [userId, shopName, phone, data.role, vendorId, industry, flag, language],
       );
       return { ok: true as const, vendorId };
     } catch (err) {
@@ -641,18 +664,27 @@ export const saveTicket = createServerFn({ method: "POST" })
     const vendorTen =
       digits(t.vendorPhone || "") || String(t.vendorId || "").match(/(\d{10})/)?.[1] || "";
     const vendorId = vendorTen.length === 10 ? inboxIdForUser(`vaani-${vendorTen}`) : t.vendorId;
-    const stamped = { ...t, vendorId, vendorPhone: t.vendorPhone || vendorTen };
+    const buyerTen = digits(t.customerPhone);
+    const userId = context.userId || (buyerTen.length === 10 ? `vaani-${buyerTen}` : "");
+    const stamped = {
+      ...t,
+      vendorId,
+      vendorPhone: t.vendorPhone || (vendorTen.length === 10 ? vendorTen : t.vendorPhone),
+      customerPhone: t.customerPhone || buyerTen,
+    };
     const profile = await sql<{ vendor_id: string }>`
-      select vendor_id from vaani_profiles where user_id = ${context.userId}
+      select vendor_id from vaani_profiles where user_id = ${userId || context.userId}
     `;
     const claimed = profile[0]?.vendor_id ?? "";
     const existing = await sql<{ user_id: string; vendor_id: string }>`
       select user_id, vendor_id from vaani_tickets where id = ${t.id}
     `;
     const payload = JSON.stringify({ ...stamped, updatedAt: t.updatedAt || new Date().toISOString() });
+    try {
     if (existing[0]) {
       const row = existing[0];
       const allowed =
+        row.user_id === userId ||
         row.user_id === context.userId ||
         row.vendor_id === vendorId ||
         row.vendor_id === t.vendorId ||
@@ -667,8 +699,12 @@ export const saveTicket = createServerFn({ method: "POST" })
     } else {
       await sql.query(
         `insert into vaani_tickets (id, user_id, vendor_id, payload, customer_phone) values ($1, $2, $3, $4::jsonb, $5)`,
-        [t.id, context.userId, vendorId, payload, digits(t.customerPhone)],
+        [t.id, userId, vendorId, payload, buyerTen],
       );
+    }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not save.";
+      return { ok: false as const, error: msg };
     }
     try {
       const { sendPushToPhones } = await import("./push-server");
@@ -711,22 +747,29 @@ export const listIncomingTickets = createServerFn({ method: "POST" })
     const rows = await sql.query<{ payload: Ticket | string; vendor_id: string }>(
       `select payload, vendor_id from vaani_tickets order by created_at desc`,
     );
-    return rows
-      .map((r) => ({ ticket: parseTicket(r.payload), vendorId: r.vendor_id }))
-      .filter(({ ticket, vendorId }) => {
-        if (ticket.status === "draft") return false;
-        const vTen = digits(ticket.vendorPhone || "") || String(vendorId || ticket.vendorId).match(/(\d{10})/)?.[1] || "";
-        const forMe =
-          vendorId === data.vendorId ||
-          vendorId === myInbox ||
-          ticket.vendorId === data.vendorId ||
-          ticket.vendorId === myInbox ||
-          (mine.length === 10 && vTen === mine);
-        if (!forMe) return false;
-        if (mine && phoneDigits(ticket.customerPhone) === mine) return false;
-        return true;
-      })
-      .map(({ ticket }) => ticket);
+    const out: Ticket[] = [];
+    for (const r of rows) {
+      let ticket: Ticket;
+      try {
+        ticket = parseTicket(r.payload);
+      } catch {
+        continue;
+      }
+      if (ticket.status === "draft") continue;
+      const vTen =
+        digits(ticket.vendorPhone || "") || String(r.vendor_id || ticket.vendorId || "").match(/(\d{10})/)?.[1] || "";
+      const forMe =
+        r.vendor_id === data.vendorId ||
+        r.vendor_id === myInbox ||
+        ticket.vendorId === data.vendorId ||
+        ticket.vendorId === myInbox ||
+        (mine.length === 10 && vTen === mine) ||
+        (mine.length === 10 && String(r.vendor_id || "").includes(mine));
+      if (!forMe) continue;
+      if (mine && phoneDigits(ticket.customerPhone) === mine) continue;
+      out.push(ticket);
+    }
+    return out;
   });
 
 export const listTickets = createServerFn({ method: "GET" })
