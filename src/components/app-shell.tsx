@@ -92,6 +92,11 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       bar.style.display = "none";
     }
     const ten = liveLoginTen() || readLoginTen() || phoneDigits(seedPhone || "") || phoneDigits(useVaani.getState().customerPhone);
+    if (isSignedOut()) {
+      useVaani.getState().setHydrated(true);
+      useVaani.getState().setAccountReady(true);
+      return;
+    }
     if (ten.length === 10) {
       rememberLoginTen(ten);
       restoreLocalAccount(ten);
@@ -405,18 +410,13 @@ function SignedInPhone({ phone }: { phone: string }) {
 function AccountBar() {
   const { t } = useT();
   function leave() {
-    try {
-      writeAccountBackup();
-    } catch {
-      /* ignore */
-    }
+    resetLoginGate();
     try {
       sessionStorage.removeItem("vaani-session-ok");
     } catch {
       /* ignore */
     }
     storeBearerToken(null);
-    resetLoginGate();
   }
   return (
     <div className="flex items-center gap-2">

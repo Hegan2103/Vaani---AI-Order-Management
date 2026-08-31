@@ -119,9 +119,12 @@ export function resetLoginGate() {
   try {
     useVaani.setState({
       customerName: "",
+      customerPhone: "",
       industry: "",
       isVendor: false,
       shopSaved: false,
+      tickets: [],
+      incoming: [],
     });
   } catch {
     /* ignore */
@@ -204,12 +207,20 @@ export function LoginGate({ children, startOn }: { children: ReactNode; startOn?
       setOn(false);
       const bar = document.getElementById("vaani-cred-bar");
       if (bar) bar.style.display = "none";
-    } else if ((hasActiveSession() && ten.length === 10) || startOn) {
+      return;
+    }
+    if (hasActiveSession() && ten.length === 10) {
       stickyEntered = true;
       setOn(true);
     }
     const sync = (ev?: Event) => {
-      if (ev?.type === "vaani-auth" && isSignedOut()) setOn(false);
+      if (isSignedOut()) {
+        setOn(false);
+        return;
+      }
+      if (ev?.type === "vaani-auth" && hasActiveSession() && (liveLoginTen() || readLoginTen()).length === 10) {
+        setOn(true);
+      }
     };
     window.addEventListener("vaani-auth", sync);
     return () => {
