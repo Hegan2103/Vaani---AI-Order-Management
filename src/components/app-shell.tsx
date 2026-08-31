@@ -8,7 +8,8 @@ import { CallScreen } from "@/routes/call.$vendorId";
 import { Button } from "@/components/ui/button";
 import { storeBearerToken } from "@/lib/auth/client";
 import { cn } from "@/lib/cn";
-import { unlockBeep } from "@/lib/vaani/notify";
+import { unlockBeep, playBeep, diffTicketEvents } from "@/lib/vaani/notify";
+import { enablePush, showLocalPopup } from "@/lib/vaani/push-client";
 import { LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { isRtl, useT } from "@/lib/vaani/i18n";
 import {
@@ -67,9 +68,12 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   const user = loginTen
     ? { id: userId, displayName: userName, primaryEmail: userEmail }
     : null;
+  const tickets = useVaani((s) => s.tickets);
+  const incoming = useVaani((s) => s.incoming);
   const prevFp = useRef("");
   const prevAll = useRef<Ticket[]>([]);
   const restoredFor = useRef("");
+  const pushAsked = useRef(false);
 
   useLayoutEffect(() => {
     const bar = document.getElementById("vaani-cred-bar");
@@ -102,7 +106,14 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       writeAccountBackup();
     };
     window.addEventListener("pagehide", dump);
-    const arm = () => unlockBeep();
+    const arm = () => {
+      unlockBeep();
+      if (!pushAsked.current) {
+        pushAsked.current = true;
+        const ten = liveLoginTen() || readLoginTen();
+        if (ten.length === 10) void enablePush(ten);
+      }
+    };
     window.addEventListener("pointerdown", arm);
     return () => {
       window.removeEventListener("pagehide", dump);
@@ -120,6 +131,16 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     document.documentElement.lang = lang;
     document.documentElement.dir = isRtl(lang) ? "rtl" : "ltr";
   }, [language]);
+
+  useEffect(() => {
+    const all = [...tickets, ...incoming];
+    const events = diffTicketEvents(prevAll.current, all);
+    prevAll.current = all;
+    if (!events.length) return;
+    pushNotices(events);
+    playBeep();
+    for (const e of events) showLocalPopup(e.title, e.body);
+  }, [tickets, incoming, pushNotices]);
 
   return (
     <div className="min-h-dvh bg-bg text-ink">

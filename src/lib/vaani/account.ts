@@ -49,6 +49,15 @@ async function ensureVaaniSchema(sql: Sql) {
   await sql.query(`alter table vaani_tickets add column if not exists customer_phone text not null default ''`);
   await sql.query(`create index if not exists vaani_tickets_user_idx on vaani_tickets (user_id)`);
   await sql.query(`create index if not exists vaani_tickets_vendor_idx on vaani_tickets (vendor_id)`);
+  await sql.query(`
+    create table if not exists vaani_push (
+      endpoint text primary key,
+      phone text not null,
+      p256dh text not null,
+      auth text not null
+    )
+  `);
+  await sql.query(`create index if not exists vaani_push_phone_idx on vaani_push (phone)`);
 }
 
 async function createPhoneSession(ten: string) {
@@ -622,6 +631,28 @@ export const saveTicket = createServerFn({ method: "POST" })
         [t.id, context.userId, t.vendorId, payload, digits(t.customerPhone)],
       );
     }
+    try {
+      const { sendPushToPhones } = await import("./push-server");
+      const saver = digits(context.userId.replace(/^vaani-/, "")) || digits(t.customerPhone);
+      const buyer = digits(t.customerPhone);
+      const vendorTen = digits(t.vendorPhone || "") || (String(t.vendorId).match(/(\d{10})/)?.[1] ?? "");
+      const targets: string[] = [];
+      if (buyer && buyer !== saver) targets.push(buyer);
+      if (vendorTen && vendorTen !== saver) targets.push(vendorTen);
+      const title =
+        t.status === "finalized"
+          ? "Order copy ready"
+          : t.status === "draft"
+            ? "Draft saved"
+            : existing[0]
+              ? "Order updated"
+              : "New order";
+      const body = `${t.customerName || "Shop"} · ${t.lines.length} lines`;
+      const url = t.status === "finalized" ? `/copy/${t.id}` : `/ticket/${t.id}`;
+      if (t.status !== "draft") await sendPushToPhones(targets, title, body, url);
+    } catch {
+      /* in-app bell still works */
+    }
     return { ok: true as const };
   });
 
@@ -674,4 +705,22 @@ export const getTicket = createServerFn({ method: "POST" })
     const raw = rows[0]?.payload;
     if (!raw) return null;
     return typeof raw === "string" ? (JSON.parse(raw) as Ticket) : raw;
+  });
+
+export const savePushSubscription = createServerFn({ method: "POST" })
+  .middleware([vaaniGate])
+  .validator((input: { phone: string; endpoint: string; p256dh: string; auth: string }) => input)
+  .handler(async ({ data }) => {
+    const ten = digits(data.phone);
+    if (ten.length !== 10 || !data.endpoint || !data.p256dh || !data.auth) {
+      return { ok: false as const };
+    }
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    await sql.query(
+      `insert into vaani_push (endpoint, phone, p256dh, auth) values ($1, $2, $3, $4)
+       on conflict (endpoint) do update set phone = excluded.phone, p256dh = excluded.p256dh, auth = excluded.auth`,
+      [data.endpoint, ten, data.p256dh, data.auth],
+    );
+    return { ok: true as const };
   });

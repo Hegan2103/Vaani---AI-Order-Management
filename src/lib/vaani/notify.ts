@@ -37,6 +37,7 @@ export function diffTicketEvents(prev: Ticket[], next: Ticket[]): VaaniEvent[] {
   for (const t of nextMap.values()) {
     const old = prevMap.get(t.id);
     if (!old) {
+      if (t.status === "draft") continue;
       events.push(ev(`New list from ${t.customerName || "customer"}`, `${t.lines.length} lines`, t.id, "vendor"));
       continue;
     }
