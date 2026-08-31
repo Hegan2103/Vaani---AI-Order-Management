@@ -9,13 +9,14 @@ import {
   OrderDateFilter,
   type DateFilter,
 } from "@/components/order-date-filter";
-import { keepSession } from "@/components/login-screen";
+import { keepSession, isSignedOut } from "@/components/login-screen";
 import { ShopCard } from "@/components/shop-card";
 import { ReminderButton } from "@/components/reminder-dialog";
 import { Button } from "@/components/ui/button";
+import { listTickets } from "@/lib/vaani/account";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, liveLoginTen, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { listedVendors, liveLoginTen, mergeTicketLists, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -44,6 +45,24 @@ export function CustomerHome() {
     const rows = readDirContacts();
     if (rows && rows.length) useVaani.setState({ contacts: rows });
   }, []);
+
+  useEffect(() => {
+    if (meTen.length !== 10) return;
+    const pull = () => {
+      if (isSignedOut()) return;
+      void listTickets()
+        .then((rows) => {
+          if (!Array.isArray(rows) || !rows.length) return;
+          useVaani.setState({ tickets: mergeTicketLists(useVaani.getState().tickets, rows) });
+        })
+        .catch(() => {
+          /* local tickets */
+        });
+    };
+    pull();
+    const id = window.setInterval(pull, 4000);
+    return () => window.clearInterval(id);
+  }, [meTen]);
 
   const filtered = useMemo(() => {
     const dir = readDirContacts();

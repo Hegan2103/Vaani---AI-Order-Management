@@ -665,6 +665,7 @@ export const saveTicket = createServerFn({ method: "POST" })
       digits(t.vendorPhone || "") || String(t.vendorId || "").match(/(\d{10})/)?.[1] || "";
     const vendorId = vendorTen.length === 10 ? inboxIdForUser(`vaani-${vendorTen}`) : t.vendorId;
     const buyerTen = digits(t.customerPhone);
+    const loginTen = digits(String(context.userId || "").replace(/^vaani-/, ""));
     const userId = context.userId || (buyerTen.length === 10 ? `vaani-${buyerTen}` : "");
     const stamped = {
       ...t,
@@ -688,6 +689,7 @@ export const saveTicket = createServerFn({ method: "POST" })
         row.user_id === context.userId ||
         row.vendor_id === vendorId ||
         row.vendor_id === t.vendorId ||
+        (loginTen.length === 10 && String(row.vendor_id || "").includes(loginTen)) ||
         (claimed !== "" && row.vendor_id === claimed);
       if (!allowed) return { ok: false as const, error: "Could not update this list." };
       await sql.query(`update vaani_tickets set payload = $1::jsonb, vendor_id = $2, customer_phone = $3 where id = $4`, [
@@ -777,9 +779,13 @@ export const listTickets = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const sql = await getSql();
     await ensureVaaniSchema(sql);
-    const rows = await sql<{ payload: Ticket | string }>`
-      select payload from vaani_tickets where user_id = ${context.userId} order by created_at desc
-    `;
+    const loginTen = digits(String(context.userId || "").replace(/^vaani-/, ""));
+    const rows = await sql.query<{ payload: Ticket | string }>(
+      loginTen.length === 10
+        ? `select payload from vaani_tickets where user_id = $1 or customer_phone = $2 order by created_at desc`
+        : `select payload from vaani_tickets where user_id = $1 order by created_at desc`,
+      loginTen.length === 10 ? [context.userId, loginTen] : [context.userId],
+    );
     return rows.map((r) => parseTicket(r.payload));
   });
 
@@ -788,18 +794,27 @@ export const getTicket = createServerFn({ method: "POST" })
   .validator((input: { id: string }) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
+    const loginTen = digits(String(context.userId || "").replace(/^vaani-/, ""));
+    const myInbox = loginTen.length === 10 ? inboxIdForUser(`vaani-${loginTen}`) : "";
     const profile = await sql<{ vendor_id: string }>`
       select vendor_id from vaani_profiles where user_id = ${context.userId}
     `;
     const claimed = profile[0]?.vendor_id ?? "";
-    const rows = await sql<{ payload: Ticket | string }>`
-      select payload from vaani_tickets
-      where id = ${data.id}
-        and (user_id = ${context.userId} or (${claimed} <> '' and vendor_id = ${claimed}))
-    `;
-    const raw = rows[0]?.payload;
-    if (!raw) return null;
-    return typeof raw === "string" ? (JSON.parse(raw) as Ticket) : raw;
+    const rows = await sql.query<{ payload: Ticket | string; user_id: string; vendor_id: string; customer_phone: string }>(
+      `select payload, user_id, vendor_id, customer_phone from vaani_tickets where id = $1`,
+      [data.id],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const ticket = parseTicket(row.payload);
+    const buyer = digits(ticket.customerPhone || row.customer_phone || "");
+    const allowed =
+      row.user_id === context.userId ||
+      (claimed !== "" && row.vendor_id === claimed) ||
+      row.vendor_id === myInbox ||
+      (loginTen.length === 10 && (buyer === loginTen || String(row.vendor_id || "").includes(loginTen)));
+    if (!allowed) return null;
+    return ticket;
   });
 
 export const savePushSubscription = createServerFn({ method: "POST" })

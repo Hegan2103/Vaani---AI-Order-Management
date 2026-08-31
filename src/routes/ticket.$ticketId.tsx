@@ -53,12 +53,6 @@ function TicketPage() {
         if (!alive) return;
         if (t) {
           const local = foundRef.current;
-          const localTs = local ? Date.parse(local.updatedAt || local.createdAt) || 0 : 0;
-          const remoteTs = Date.parse(t.updatedAt || t.createdAt) || 0;
-          if (local && localTs > remoteTs) {
-            setLookup("ok");
-            return;
-          }
           const merged = mergeOneTicket(local, t);
           if (role === "vendor") upsertIncoming(merged);
           else upsertTicket(merged);
