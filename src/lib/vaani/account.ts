@@ -633,12 +633,14 @@ export const saveTicket = createServerFn({ method: "POST" })
     }
     try {
       const { sendPushToPhones } = await import("./push-server");
-      const saver = digits(context.userId.replace(/^vaani-/, "")) || digits(t.customerPhone);
+      const saver = digits(context.userId.replace(/^vaani-/, ""));
       const buyer = digits(t.customerPhone);
       const vendorTen = digits(t.vendorPhone || "") || (String(t.vendorId).match(/(\d{10})/)?.[1] ?? "");
       const targets: string[] = [];
-      if (buyer && buyer !== saver) targets.push(buyer);
-      if (vendorTen && vendorTen !== saver) targets.push(vendorTen);
+      if (t.status !== "draft") {
+        if (saver && saver === buyer && vendorTen && vendorTen !== saver) targets.push(vendorTen);
+        else if (saver && saver === vendorTen && buyer && buyer !== saver) targets.push(buyer);
+      }
       const title =
         t.status === "finalized"
           ? "Order copy ready"
@@ -649,7 +651,7 @@ export const saveTicket = createServerFn({ method: "POST" })
               : "New order";
       const body = `${t.customerName || "Shop"} · ${t.lines.length} lines`;
       const url = t.status === "finalized" ? `/copy/${t.id}` : `/ticket/${t.id}`;
-      if (t.status !== "draft") await sendPushToPhones(targets, title, body, url);
+      if (targets.length) await sendPushToPhones(targets, title, body, url);
     } catch {
       /* in-app bell still works */
     }

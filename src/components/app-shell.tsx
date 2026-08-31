@@ -133,14 +133,23 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   }, [language]);
 
   useEffect(() => {
+    const me = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
     const all = [...tickets, ...incoming];
-    const events = diffTicketEvents(prevAll.current, all);
+    const events = diffTicketEvents(prevAll.current, all).filter((e) => {
+      const ticket = all.find((row) => row.id === e.ticketId);
+      if (!ticket || !me) return false;
+      const buyer = phoneDigits(ticket.customerPhone);
+      const vendorTen = phoneDigits(ticket.vendorPhone || "") || String(ticket.vendorId).match(/(\d{10})/)?.[1] || "";
+      if (e.audience === "vendor") return vendorTen === me && buyer !== me;
+      if (e.audience === "customer") return buyer === me && vendorTen !== me;
+      return false;
+    });
     prevAll.current = all;
     if (!events.length) return;
     pushNotices(events);
     playBeep();
     for (const e of events) showLocalPopup(e.title, e.body);
-  }, [tickets, incoming, pushNotices]);
+  }, [tickets, incoming, pushNotices, customerPhone]);
 
   return (
     <div className="min-h-dvh bg-bg text-ink">
