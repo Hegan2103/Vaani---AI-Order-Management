@@ -34,6 +34,8 @@ export function CustomerHome() {
   const [industry, setIndustry] = useState<Industry | "all">("all");
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
+  const [multiPick, setMultiPick] = useState<Array<{ name: string; numbers: Array<{ ten: string; display: string }> }>>([]);
+  const [pickedTens, setPickedTens] = useState<Record<string, boolean>>({});
   const { t, industry: tradeLabel, locale } = useT();
 
   const meTen = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
@@ -68,6 +70,25 @@ export function CustomerHome() {
     });
   }, [contacts, q, industry, liveVendors, meTen]);
 
+  function telText(raw: unknown): string {
+    if (typeof raw === "string") return raw;
+    if (raw && typeof raw === "object") {
+      return String(
+        (raw as { value?: string; tel?: string; number?: string }).value ||
+          (raw as { tel?: string }).tel ||
+          (raw as { number?: string }).number ||
+          "",
+      );
+    }
+    return String(raw ?? "");
+  }
+
+  function commitContacts(rows: Contact[]) {
+    if (!rows.length) return;
+    writeDirContacts(rows);
+    setImportMsg(t("importedN", { n: rows.length }));
+  }
+
   async function pullDirectory() {
     const ten = readLoginTen() || phoneDigits(customerPhone);
     if (ten.length === 10) rememberLoginTen(ten);
@@ -89,7 +110,8 @@ export function CustomerHome() {
       keepSession();
       restoreLocalAccount(ten);
       if (ten.length === 10) rememberLoginTen(ten);
-      const extra: Contact[] = [];
+      const auto: Contact[] = [];
+      const multi: Array<{ name: string; numbers: Array<{ ten: string; display: string }> }> = [];
       const seen = new Set<string>();
       for (const p of picked) {
         const tels = Array.isArray(p.tel) ? p.tel : p.tel ? [p.tel] : [];
@@ -98,49 +120,77 @@ export function CustomerHome() {
           : typeof p.name === "string"
             ? p.name
             : "";
-        let added = false;
+        const numbers: Array<{ ten: string; display: string }> = [];
         for (const raw of tels) {
-          const phone =
-            typeof raw === "string"
-              ? raw
-              : raw && typeof raw === "object"
-                ? String(
-                    (raw as { value?: string; tel?: string; number?: string }).value ||
-                      (raw as { tel?: string }).tel ||
-                      (raw as { number?: string }).number ||
-                      "",
-                  )
-                : String(raw ?? "");
+          const phone = telText(raw);
           const digits = phoneDigits(phone);
           if (digits.length !== 10) continue;
-          if (seen.has(digits)) continue;
-          seen.add(digits);
-          extra.push({
-            id: crypto.randomUUID(),
-            name: bookName.trim() || phone,
-            phone,
-            vendorId: vendorForPhone(phone)?.id ?? null,
-            source: "phone",
-          });
-          added = true;
+          if (numbers.some((n) => n.ten === digits)) continue;
+          numbers.push({ ten: digits, display: formatInPhone(digits) });
         }
-        if (!added && bookName.trim()) {
-          extra.push({
-            id: crypto.randomUUID(),
-            name: bookName.trim(),
-            phone: tels.map(String).join(" ") || bookName,
-            vendorId: null,
-            source: "phone",
-          });
+        if (numbers.length === 0) {
+          if (bookName.trim()) {
+            auto.push({
+              id: crypto.randomUUID(),
+              name: bookName.trim(),
+              phone: tels.map((x) => telText(x)).join(" ") || bookName,
+              vendorId: null,
+              source: "phone",
+            });
+          }
+          continue;
         }
+        if (numbers.length === 1) {
+          const n = numbers[0];
+          if (!seen.has(n.ten)) {
+            seen.add(n.ten);
+            auto.push({
+              id: crypto.randomUUID(),
+              name: bookName.trim() || n.display,
+              phone: n.display,
+              vendorId: vendorForPhone(n.ten)?.id ?? null,
+              source: "phone",
+            });
+          }
+          continue;
+        }
+        multi.push({ name: bookName.trim() || numbers[0].display, numbers });
       }
-      if (extra.length) writeDirContacts(extra);
-      setImportMsg(t("importedN", { n: extra.length }));
+      if (auto.length) commitContacts(auto);
+      if (multi.length) {
+        const flags: Record<string, boolean> = {};
+        for (const c of multi) for (const n of c.numbers) flags[`${c.name}|${n.ten}`] = true;
+        setPickedTens(flags);
+        setMultiPick(multi);
+      } else if (!auto.length) {
+        setImportMsg(t("importedN", { n: 0 }));
+      }
     } catch {
       keepSession();
       restoreLocalAccount(ten);
       if (ten.length === 10) rememberLoginTen(ten);
     }
+  }
+
+  function confirmPickedNumbers() {
+    const extra: Contact[] = [];
+    const seen = new Set<string>();
+    for (const c of multiPick) {
+      for (const n of c.numbers) {
+        if (!pickedTens[`${c.name}|${n.ten}`]) continue;
+        if (seen.has(n.ten)) continue;
+        seen.add(n.ten);
+        extra.push({
+          id: crypto.randomUUID(),
+          name: c.name,
+          phone: n.display,
+          vendorId: vendorForPhone(n.ten)?.id ?? null,
+          source: "phone",
+        });
+      }
+    }
+    setMultiPick([]);
+    if (extra.length) commitContacts(extra);
   }
 
   return (
@@ -166,6 +216,47 @@ export function CustomerHome() {
           </p>
         </div>
       </section>
+
+      {multiPick.length > 0 ? (
+        <div className="fixed inset-0 z-40 grid place-items-end bg-ink/40 p-4 sm:place-items-center">
+          <div className="w-full max-w-md rounded-[var(--radius-xl)] border border-line bg-surface p-5">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("pickNumbersTitle")}</p>
+            <p className="mt-1 text-sm text-muted">{t("pickNumbersHint")}</p>
+            <ul className="mt-4 max-h-72 space-y-4 overflow-auto">
+              {multiPick.map((c) => (
+                <li key={c.name}>
+                  <p className="font-medium">{c.name}</p>
+                  <div className="mt-2 space-y-2">
+                    {c.numbers.map((n) => {
+                      const key = `${c.name}|${n.ten}`;
+                      return (
+                        <label key={key} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(pickedTens[key])}
+                            onChange={(e) =>
+                              setPickedTens((prev) => ({ ...prev, [key]: e.target.checked }))
+                            }
+                          />
+                          <span>{n.display}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex gap-2">
+              <Button className="flex-1" type="button" onClick={confirmPickedNumbers}>
+                {t("importSelected")}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setMultiPick([])}>
+                {t("cancel")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {importMsg ? <p className="mb-3 text-sm text-ok">{importMsg}</p> : null}
 
