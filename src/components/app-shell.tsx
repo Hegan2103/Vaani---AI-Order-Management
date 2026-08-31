@@ -168,11 +168,11 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   }, [language]);
 
   useEffect(() => {
-    const me = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
+    const me = liveLoginTen() || readLoginTen();
     const all = [...tickets, ...incoming];
     const events = diffTicketEvents(prevAll.current, all).filter((e) => {
       const ticket = all.find((row) => row.id === e.ticketId);
-      if (!ticket || !me) return false;
+      if (!ticket || me.length !== 10) return false;
       const buyer = phoneDigits(ticket.customerPhone);
       const vendorTen = phoneDigits(ticket.vendorPhone || "") || String(ticket.vendorId).match(/(\d{10})/)?.[1] || "";
       if (e.audience === "vendor") return vendorTen === me && buyer !== me;
@@ -184,7 +184,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     pushNotices(events);
     playBeep();
     for (const e of events) showLocalPopup(e.title, e.body);
-  }, [tickets, incoming, pushNotices, customerPhone]);
+  }, [tickets, incoming, pushNotices]);
 
   useEffect(() => {
     const me = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
@@ -324,11 +324,22 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
 function NoticeBell() {
   const notices = useVaani((s) => s.notices);
   const markNoticesRead = useVaani((s) => s.markNoticesRead);
-  const role = useVaani((s) => s.role);
+  const tickets = useVaani((s) => s.tickets);
+  const incoming = useVaani((s) => s.incoming);
   const { t } = useT();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const visible = notices.filter((n) => !("audience" in n) || n.audience === role);
+  const me = liveLoginTen() || readLoginTen();
+  const visible = notices.filter((n) => {
+    if (String(n.ticketId || "").startsWith("reminder:")) return true;
+    const ticket = tickets.find((row) => row.id === n.ticketId) || incoming.find((row) => row.id === n.ticketId);
+    if (!ticket || me.length !== 10) return false;
+    const buyer = phoneDigits(ticket.customerPhone);
+    const vendorTen = phoneDigits(ticket.vendorPhone || "") || String(ticket.vendorId).match(/(\d{10})/)?.[1] || "";
+    if (n.audience === "vendor") return vendorTen === me && buyer !== me;
+    if (n.audience === "customer") return buyer === me && vendorTen !== me;
+    return false;
+  });
   const unread = visible.filter((n) => !n.read).length;
 
   return (
@@ -373,9 +384,6 @@ function NoticeBell() {
                         to: "/ticket/$ticketId",
                         params: { ticketId: n.ticketId },
                       });
-                      if (role === "vendor") {
-                        /* stay vendor */
-                      }
                     }}
                   >
                     <p className="text-sm font-medium">{n.title}</p>

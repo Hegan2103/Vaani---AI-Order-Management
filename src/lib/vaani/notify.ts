@@ -38,6 +38,7 @@ export function diffTicketEvents(prev: Ticket[], next: Ticket[]): VaaniEvent[] {
     const old = prevMap.get(t.id);
     if (!old) {
       if (t.status === "draft") continue;
+      if (t.lines.some((l) => l.status !== "pending")) continue;
       events.push(ev(`New list from ${t.customerName || "customer"}`, `${t.lines.length} lines`, t.id, "vendor"));
       continue;
     }
