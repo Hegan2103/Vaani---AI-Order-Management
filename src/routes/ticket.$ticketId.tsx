@@ -3,10 +3,10 @@ import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { getTicket, saveTicket } from "@/lib/vaani/account";
+import { getTicket, lookupVendorByPhone, saveTicket } from "@/lib/vaani/account";
 import { composeOrderCopy } from "@/lib/vaani/ai";
 import { useT } from "@/lib/vaani/i18n";
-import { mergeOneTicket, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { listedVendors, mergeOneTicket, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import { phoneDigits } from "@/lib/vaani/seed";
 import type { LineItem, Ticket, TicketStatus } from "@/lib/vaani/types";
 
@@ -30,7 +30,7 @@ function TicketPage() {
   const { t, industry: tradeLabel } = useT();
   const liveVendors = useVaani((s) => s.liveVendors);
   const customerName = useVaani((s) => s.customerName);
-  const contacts = useVaani((s) => s.contacts);
+  const [remoteShop, setRemoteShop] = useState("");
   const found = useVaani(
     (s) => s.tickets.find((t) => t.id === ticketId) ?? s.incoming.find((t) => t.id === ticketId),
   );
@@ -81,6 +81,23 @@ function TicketPage() {
     };
   }, [ticketId, role, upsertTicket, upsertIncoming]);
 
+  useEffect(() => {
+    const ten = phoneDigits(found?.vendorPhone || "");
+    if (ten.length !== 10 || role === "vendor") return;
+    let alive = true;
+    void lookupVendorByPhone({ data: { phone: ten } })
+      .then((row) => {
+        if (!alive || !row?.shopName) return;
+        setRemoteShop(row.shopName);
+      })
+      .catch(() => {
+        /* listed shop still used */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [found?.vendorPhone, role]);
+
   if (lookup === "wait" && !found) {
     return (
       <>
@@ -112,11 +129,12 @@ function TicketPage() {
     liveVendors.find((v) => v.id === ticket.vendorId);
   const vendorTen = phoneDigits(ticket.vendorPhone || vendor?.phone || "");
   const mine = (customerName || "").trim();
-  const listedShop = (vendor?.shop || "").trim();
+  const listedExact = listedVendors().find((v) => phoneDigits(v.phone) === vendorTen);
+  const listedShop = (listedExact?.shop || vendor?.shop || "").trim();
   const stampedShop = (ticket.vendorShop || "").trim();
-  const bookName = contacts.find((c) => phoneDigits(c.phone) === vendorTen)?.name.trim() || "";
-  const clean = (name: string) => name && name !== mine && !/^Shop \d{10}$/.test(name) ? name : "";
-  const customerVendorTitle = clean(listedShop) || clean(stampedShop) || bookName || stampedShop || listedShop || t("vendor");
+  const clean = (name: string) => (name && name !== mine && !/^Shop \d{10}$/.test(name) ? name : "");
+  const customerVendorTitle =
+    clean(remoteShop) || clean(listedShop) || clean(stampedShop) || remoteShop || t("vendor");
   const pending = ticket.lines.some((l) => l.status === "pending");
   const waitingOnPrice = ticket.lines.some((l) => l.status === "quoted");
   const vendorReady =

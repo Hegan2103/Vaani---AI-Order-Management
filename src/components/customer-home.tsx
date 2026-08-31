@@ -308,7 +308,9 @@ export function CustomerHome() {
                 <p className="truncate font-medium">{c.name}</p>
                 <p className="truncate text-xs text-muted">
                   {c.phone}
-                  {trade ? ` · ${tradeLabel(trade)}` : found?.industry && found.industry !== "grocery" ? ` · ${tradeLabel(found.industry)}` : ""}
+                  {ten.length === 10 && ten !== meTen
+                    ? ` · ${tradeLabel(trade || (found?.industry && found.industry !== "grocery" ? found.industry : "pharmaceutical"))}`
+                    : ""}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
