@@ -196,6 +196,8 @@ export const listPublicVendors = createServerFn({ method: "GET" })
       })
       .filter((r) => r.ten.length === 10 && r.shopName);
   });
+
+export const loadProfile = createServerFn({ method: "GET" })
   .middleware([vaaniGate])
   .handler(async ({ context }) => {
     const sql = await getSql();
