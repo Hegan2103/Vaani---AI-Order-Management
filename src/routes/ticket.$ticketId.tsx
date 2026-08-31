@@ -7,6 +7,7 @@ import { getTicket, saveTicket } from "@/lib/vaani/account";
 import { composeOrderCopy } from "@/lib/vaani/ai";
 import { useT } from "@/lib/vaani/i18n";
 import { mergeOneTicket, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { phoneDigits } from "@/lib/vaani/seed";
 import type { LineItem, Ticket, TicketStatus } from "@/lib/vaani/types";
 
 export const Route = createFileRoute("/ticket/$ticketId")({ component: TicketPage });
@@ -28,6 +29,8 @@ function TicketPage() {
   const language = useVaani((s) => s.language);
   const { t, industry: tradeLabel } = useT();
   const liveVendors = useVaani((s) => s.liveVendors);
+  const customerName = useVaani((s) => s.customerName);
+  const contacts = useVaani((s) => s.contacts);
   const found = useVaani(
     (s) => s.tickets.find((t) => t.id === ticketId) ?? s.incoming.find((t) => t.id === ticketId),
   );
@@ -107,6 +110,13 @@ function TicketPage() {
     vendorForPhone(ticket.vendorPhone || "") ||
     vendorById(ticket.vendorId) ||
     liveVendors.find((v) => v.id === ticket.vendorId);
+  const vendorTen = phoneDigits(ticket.vendorPhone || vendor?.phone || "");
+  const mine = (customerName || "").trim();
+  const listedShop = (vendor?.shop || "").trim();
+  const stampedShop = (ticket.vendorShop || "").trim();
+  const bookName = contacts.find((c) => phoneDigits(c.phone) === vendorTen)?.name.trim() || "";
+  const clean = (name: string) => name && name !== mine && !/^Shop \d{10}$/.test(name) ? name : "";
+  const customerVendorTitle = clean(listedShop) || clean(stampedShop) || bookName || stampedShop || listedShop || t("vendor");
   const pending = ticket.lines.some((l) => l.status === "pending");
   const waitingOnPrice = ticket.lines.some((l) => l.status === "quoted");
   const vendorReady =
@@ -177,7 +187,7 @@ function TicketPage() {
       <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl tracking-tight md:text-4xl">
-            {role === "vendor" ? ticket.customerName || t("customer") : ticket.vendorShop || vendor?.shop || t("vendor")}
+            {role === "vendor" ? ticket.customerName || t("customer") : customerVendorTitle}
           </h1>
           <p className="text-sm text-muted">
             {role === "vendor" ? ticket.customerPhone : ticket.vendorPhone || vendor?.phone || ""}

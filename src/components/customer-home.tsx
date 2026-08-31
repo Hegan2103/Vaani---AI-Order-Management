@@ -288,6 +288,7 @@ export function CustomerHome() {
           filtered.map((c) => {
           const ten = phoneDigits(c.phone);
           const found = ten.length === 10 ? vendorForPhone(c.phone) : undefined;
+          const trade = found?.industry && found.shop && !/^Shop \d{10}$/.test(found.shop) ? found.industry : undefined;
           const v =
             ten.length === 10 && ten !== meTen
               ? {
@@ -296,7 +297,7 @@ export function CustomerHome() {
                   shop: (found?.shop || "").trim() || `Shop ${ten}`,
                   phone: formatInPhone(ten),
                   city: "",
-                  industry: found?.industry || "grocery",
+                  industry: trade || found?.industry || "pharmaceutical",
                   catalog: found?.catalog || [],
                   altPhones: [ten],
                 }
@@ -307,7 +308,7 @@ export function CustomerHome() {
                 <p className="truncate font-medium">{c.name}</p>
                 <p className="truncate text-xs text-muted">
                   {c.phone}
-                  {v ? ` · ${tradeLabel(v.industry)}` : ""}
+                  {trade ? ` · ${tradeLabel(trade)}` : found?.industry && found.industry !== "grocery" ? ` · ${tradeLabel(found.industry)}` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -397,15 +398,8 @@ export function CustomerHome() {
                         const byPhone = row.vendorPhone ? vendorForPhone(row.vendorPhone) : undefined;
                         const vend = byPhone || vendorById(row.vendorId);
                         const vTen = (row.vendorPhone || vend?.phone || "").replace(/\D/g, "").slice(-10);
-                        const listedName = (vend?.shop || vend?.name || "").trim();
-                        let title = listedName;
-                        if (!title || title === (customerName || "").trim() || /^Shop \d{10}$/.test(title)) {
-                          const stamped = (row.vendorShop || "").trim();
-                          title =
-                            stamped && stamped !== (customerName || "").trim() && !/^Shop \d{10}$/.test(stamped)
-                              ? stamped
-                              : `Shop ${vTen || ""}`;
-                        }
+                        const book = contacts.find((c) => phoneDigits(c.phone) === vTen)?.name.trim();
+                        const title = book || (row.vendorShop || "").trim() || vend?.shop || `Shop ${vTen || ""}`;
                         const phone = vend?.phone || row.vendorPhone || "";
                         return (
                           <li key={row.id} className="flex items-center gap-2">
