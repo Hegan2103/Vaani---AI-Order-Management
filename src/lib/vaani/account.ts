@@ -58,6 +58,14 @@ async function ensureVaaniSchema(sql: Sql) {
     )
   `);
   await sql.query(`create index if not exists vaani_push_phone_idx on vaani_push (phone)`);
+  await sql.query(`
+    create table if not exists vaani_reminders (
+      id text primary key,
+      owner_ten text not null,
+      contact_ten text not null,
+      payload jsonb not null
+    )
+  `);
 }
 
 async function createPhoneSession(ten: string) {
@@ -724,5 +732,55 @@ export const savePushSubscription = createServerFn({ method: "POST" })
        on conflict (endpoint) do update set phone = excluded.phone, p256dh = excluded.p256dh, auth = excluded.auth`,
       [data.endpoint, ten, data.p256dh, data.auth],
     );
+    return { ok: true as const };
+  });
+
+export const saveReminder = createServerFn({ method: "POST" })
+  .middleware([vaaniGate])
+  .validator((input: { reminder: import("./types").Reminder }) => input)
+  .handler(async ({ data }) => {
+    const r = data.reminder;
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    await sql.query(
+      `insert into vaani_reminders (id, owner_ten, contact_ten, payload) values ($1, $2, $3, $4::jsonb)
+       on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload`,
+      [r.id, digits(r.ownerTen), digits(r.contactTen), JSON.stringify(r)],
+    );
+    return { ok: true as const };
+  });
+
+export const deleteReminderRemote = createServerFn({ method: "POST" })
+  .middleware([vaaniGate])
+  .validator((input: { id: string }) => input)
+  .handler(async ({ data }) => {
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    await sql.query(`delete from vaani_reminders where id = $1`, [data.id]);
+    return { ok: true as const };
+  });
+
+export const listRemindersRemote = createServerFn({ method: "POST" })
+  .middleware([vaaniGate])
+  .validator((input: { phone: string }) => input)
+  .handler(async ({ data }) => {
+    const ten = digits(data.phone);
+    if (ten.length !== 10) return [];
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql.query<{ payload: unknown }>(
+      `select payload from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
+      [ten],
+    );
+    return rows.map((row) => (typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload));
+  });
+
+export const fireReminderPush = createServerFn({ method: "POST" })
+  .middleware([vaaniGate])
+  .validator((input: { phones: string[]; title: string; body: string }) => input)
+  .handler(async ({ data }) => {
+    const { sendPushToPhones } = await import("./push-server");
+    const phones = data.phones.map((p) => digits(p)).filter((p) => p.length === 10);
+    await sendPushToPhones(phones, data.title, data.body, "/");
     return { ok: true as const };
   });

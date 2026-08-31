@@ -11,6 +11,7 @@ import {
 } from "@/components/order-date-filter";
 import { keepSession } from "@/components/login-screen";
 import { ShopCard } from "@/components/shop-card";
+import { ReminderButton } from "@/components/reminder-dialog";
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
@@ -218,6 +219,10 @@ export function CustomerHome() {
                   {v ? ` · ${tradeLabel(v.industry)}` : ""}
                 </p>
               </div>
+              <div className="flex shrink-0 items-center gap-2">
+              {ten.length === 10 && ten !== meTen ? (
+                <ReminderButton contactName={c.name} contactPhone={c.phone} notifyBoth={false} />
+              ) : null}
               {ten === meTen ? (
                 <span className="text-xs text-subtle">{t("yourShop")}</span>
               ) : v ? (
@@ -243,6 +248,7 @@ export function CustomerHome() {
               ) : (
                 <span className="text-xs text-subtle">{t("notOnVaani")}</span>
               )}
+              </div>
             </li>
           );
         })

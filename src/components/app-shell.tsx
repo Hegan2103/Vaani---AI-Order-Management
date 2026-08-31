@@ -6,12 +6,19 @@ import { resetLoginGate } from "@/components/login-screen";
 import { VendorHome } from "@/components/vendor-home";
 import { CallScreen } from "@/routes/call.$vendorId";
 import { Button } from "@/components/ui/button";
-import { storeBearerToken } from "@/lib/auth/client";
+import { fireReminderPush, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
 import { cn } from "@/lib/cn";
 import { unlockBeep, playBeep, diffTicketEvents } from "@/lib/vaani/notify";
 import { enablePush, showLocalPopup } from "@/lib/vaani/push-client";
-import { LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
-import { isRtl, useT } from "@/lib/vaani/i18n";
+import {
+  isReminderDue,
+  listReminders,
+  markFired,
+  mergeReminders,
+  reminderTargets,
+  upsertReminder,
+} from "@/lib/vaani/reminders";
+import type { Industry, Reminder, Ticket } from "@/lib/vaani/types";
 import {
   mergeTicketLists,
   readAccountBackup,
@@ -28,7 +35,8 @@ import {
   writeShopIdentity,
   writeUiLanguage,
 } from "@/lib/vaani/store";
-import type { Industry, Ticket } from "@/lib/vaani/types";
+import { LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
+import { isRtl, useT } from "@/lib/vaani/i18n";
 
 export function AppShell({ children, seedPhone }: { children: ReactNode; seedPhone?: string }) {
   const seedTen = phoneDigits(seedPhone || "") || (typeof window !== "undefined" ? liveLoginTen() || readLoginTen() : "");
@@ -151,6 +159,65 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     for (const e of events) showLocalPopup(e.title, e.body);
   }, [tickets, incoming, pushNotices, customerPhone]);
 
+  useEffect(() => {
+    const me = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
+    if (me.length !== 10) return;
+    let stop = false;
+    async function tick() {
+      if (stop) return;
+      try {
+        const remote = await listRemindersRemote({ data: { phone: me } });
+        if (Array.isArray(remote) && remote.length) mergeReminders(remote as Reminder[]);
+      } catch {
+        /* local reminders */
+      }
+      const due = listReminders().filter((r) => isReminderDue(r));
+      for (const r of due) {
+        const stamp = new Date().toISOString().slice(0, 10);
+        markFired(r.id);
+        const next = { ...r, lastFired: stamp };
+        upsertReminder(next);
+        try {
+          await saveReminder({ data: { reminder: next } });
+        } catch {
+          /* local */
+        }
+        const targets = reminderTargets(r);
+        if (targets.includes(me)) {
+          pushNotices([
+            {
+              id: crypto.randomUUID(),
+              at: new Date().toISOString(),
+              title: r.contactName || "Reminder",
+              body: r.message || r.contactName,
+              ticketId: `reminder:${r.id}`,
+              read: false,
+              audience: useVaani.getState().role,
+            },
+          ]);
+          showLocalPopup(r.contactName || "Reminder", r.message || r.contactName);
+          playBeep();
+        }
+        const others = targets.filter((p) => p !== me);
+        if (others.length) {
+          try {
+            await fireReminderPush({
+              data: { phones: others, title: r.contactName || "Reminder", body: r.message || r.contactName },
+            });
+          } catch {
+            /* local */
+          }
+        }
+      }
+    }
+    void tick();
+    const id = window.setInterval(() => void tick(), 30000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [customerPhone, pushNotices]);
+
   return (
     <div className="min-h-dvh bg-bg text-ink">
       <header className="no-print sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur-sm">
@@ -272,6 +339,7 @@ function NoticeBell() {
                     className="w-full px-3 py-2 text-left hover:bg-accent-soft"
                     onClick={() => {
                       setOpen(false);
+                      if (n.ticketId.startsWith("reminder:")) return;
                       void navigate({
                         to: "/ticket/$ticketId",
                         params: { ticketId: n.ticketId },

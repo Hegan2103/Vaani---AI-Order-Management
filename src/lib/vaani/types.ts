@@ -98,3 +98,22 @@ export type VaaniNotice = {
   audience: "customer" | "vendor";
 };
 
+export type ReminderRepeat = "daily" | "weekly" | "once" | "range";
+
+export type Reminder = {
+  id: string;
+  ownerTen: string;
+  contactTen: string;
+  contactName: string;
+  message: string;
+  repeat: ReminderRepeat;
+  time: string;
+  weekday: number;
+  date: string;
+  from: string;
+  to: string;
+  notifyBoth: boolean;
+  lastFired: string;
+  createdAt: string;
+};
+

@@ -1,5 +1,5 @@
 import { listIncomingTickets } from "@/lib/vaani/account";
-import { inboxIdForUser } from "@/lib/vaani/seed";
+import { inboxIdForUser, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { Link } from "@tanstack/react-router";
 import { Inbox } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -12,6 +12,7 @@ import {
   type DateFilter,
 } from "@/components/order-date-filter";
 import { ShopCard } from "@/components/shop-card";
+import { ReminderButton } from "@/components/reminder-dialog";
 import { useT } from "@/lib/vaani/i18n";
 import { mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
@@ -21,6 +22,7 @@ export function VendorHome() {
   const customerPhone = useVaani((s) => s.customerPhone);
   const industry = useVaani((s) => s.industry);
   const isVendor = useVaani((s) => s.isVendor);
+  const contacts = useVaani((s) => s.contacts);
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
@@ -59,6 +61,26 @@ export function VendorHome() {
         </div>
         <ShopCard />
       </div>
+
+      {contacts.filter((c) => phoneDigits(c.phone).length === 10 && phoneDigits(c.phone) !== ten).length > 0 ? (
+        <section className="mb-8">
+          <h2 className="mb-3 font-display text-2xl tracking-tight">{t("setReminder")}</h2>
+          <ul className="divide-y divide-line rounded-[var(--radius-xl)] border border-line bg-surface">
+            {contacts
+              .filter((c) => phoneDigits(c.phone).length === 10 && phoneDigits(c.phone) !== ten)
+              .slice(0, 40)
+              .map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{c.name}</p>
+                    <p className="truncate text-xs text-muted">{formatInPhone(phoneDigits(c.phone))}</p>
+                  </div>
+                  <ReminderButton contactName={c.name} contactPhone={c.phone} notifyBoth />
+                </li>
+              ))}
+          </ul>
+        </section>
+      ) : null}
 
       {inbox.length === 0 && (!shopName || !shopIndustry || !listed) ? (
         <div className="rounded-[var(--radius-xl)] border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
