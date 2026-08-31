@@ -102,18 +102,23 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   }, [seedPhone]);
 
   useEffect(() => {
-    void listPublicVendors()
-      .then((rows) => {
-        if (!Array.isArray(rows) || isSignedOut()) return;
-        for (const r of rows) {
-          if (!r.shopName || r.ten.length !== 10) continue;
-          rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
-        }
-        setLiveVendors(listedVendors());
-      })
-      .catch(() => {
-        /* local listings */
-      });
+    const loadShops = () => {
+      void listPublicVendors()
+        .then((rows) => {
+          if (!Array.isArray(rows) || isSignedOut()) return;
+          for (const r of rows) {
+            if (!r.shopName || r.ten.length !== 10) continue;
+            rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
+          }
+          setLiveVendors(listedVendors());
+        })
+        .catch(() => {
+          /* local listings */
+        });
+    };
+    loadShops();
+    const id = window.setInterval(loadShops, 8000);
+    return () => window.clearInterval(id);
   }, [setLiveVendors]);
 
   useEffect(() => {

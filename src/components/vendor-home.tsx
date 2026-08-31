@@ -31,21 +31,26 @@ export function VendorHome() {
   const shopName = snap?.shopName || "";
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
-  const inbox = incoming.filter((t) => t.status !== "draft" && !isOwnCustomerOrder(t, customerPhone));
+  const inbox = incoming.filter((t) => t.status !== "draft" && !isOwnCustomerOrder(t, ten));
   useEffect(() => {
     if (ten.length !== 10) return;
     const local = mergeTicketLists(readVendorInbox(ten), readAccountBackup(ten)?.incoming ?? []);
     if (local.length) useVaani.setState({ incoming: local });
     const vendorId = inboxIdForUser(`vaani-${ten}`);
-    void listIncomingTickets({ data: { vendorId } })
-      .then((rows) => {
-        if (sessionStorage.getItem("vaani-signed-out") === "1") return;
-        if (!Array.isArray(rows) || !rows.length) return;
-        useVaani.setState({ incoming: mergeTicketLists(useVaani.getState().incoming, rows) });
-      })
-      .catch(() => {
-        /* local inbox still used */
-      });
+    const pull = () => {
+      void listIncomingTickets({ data: { vendorId } })
+        .then((rows) => {
+          if (sessionStorage.getItem("vaani-signed-out") === "1") return;
+          if (!Array.isArray(rows) || !rows.length) return;
+          useVaani.setState({ incoming: mergeTicketLists(useVaani.getState().incoming, rows) });
+        })
+        .catch(() => {
+          /* local inbox still used */
+        });
+    };
+    pull();
+    const id = window.setInterval(pull, 4000);
+    return () => window.clearInterval(id);
   }, [ten]);
 
   return (

@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } fr
 import { Button } from "@/components/ui/button";
 import { INDUSTRY_LABEL, LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
+import { saveProfile } from "@/lib/vaani/account";
 import { liveLoginTen, readLoginTen, readShopIdentity, useVaani, type ShopIdentity } from "@/lib/vaani/store";
 import type { Industry } from "@/lib/vaani/types";
 
@@ -135,6 +136,18 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     EDITING = false;
     setEditing(false);
     setShopMsg(t("shopSaved"));
+    void saveProfile({
+      data: {
+        shopName,
+        phone: identity.phone,
+        role: identity.isVendor ? "vendor" : "customer",
+        industry: identity.industry,
+        isVendor: identity.isVendor,
+        language: identity.language,
+      },
+    }).catch(() => {
+      /* local shop still saved */
+    });
   }
 
   return (

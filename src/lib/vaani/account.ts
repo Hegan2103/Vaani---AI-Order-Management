@@ -638,6 +638,10 @@ export const saveTicket = createServerFn({ method: "POST" })
     const t = data.ticket;
     const sql = await getSql();
     await ensureVaaniSchema(sql);
+    const vendorTen =
+      digits(t.vendorPhone || "") || String(t.vendorId || "").match(/(\d{10})/)?.[1] || "";
+    const vendorId = vendorTen.length === 10 ? inboxIdForUser(`vaani-${vendorTen}`) : t.vendorId;
+    const stamped = { ...t, vendorId, vendorPhone: t.vendorPhone || vendorTen };
     const profile = await sql<{ vendor_id: string }>`
       select vendor_id from vaani_profiles where user_id = ${context.userId}
     `;
@@ -645,31 +649,31 @@ export const saveTicket = createServerFn({ method: "POST" })
     const existing = await sql<{ user_id: string; vendor_id: string }>`
       select user_id, vendor_id from vaani_tickets where id = ${t.id}
     `;
-    const payload = JSON.stringify({ ...t, updatedAt: t.updatedAt || new Date().toISOString() });
+    const payload = JSON.stringify({ ...stamped, updatedAt: t.updatedAt || new Date().toISOString() });
     if (existing[0]) {
       const row = existing[0];
       const allowed =
         row.user_id === context.userId ||
+        row.vendor_id === vendorId ||
         row.vendor_id === t.vendorId ||
         (claimed !== "" && row.vendor_id === claimed);
       if (!allowed) return { ok: false as const, error: "Could not update this list." };
       await sql.query(`update vaani_tickets set payload = $1::jsonb, vendor_id = $2, customer_phone = $3 where id = $4`, [
         payload,
-        t.vendorId,
+        vendorId,
         digits(t.customerPhone),
         t.id,
       ]);
     } else {
       await sql.query(
         `insert into vaani_tickets (id, user_id, vendor_id, payload, customer_phone) values ($1, $2, $3, $4::jsonb, $5)`,
-        [t.id, context.userId, t.vendorId, payload, digits(t.customerPhone)],
+        [t.id, context.userId, vendorId, payload, digits(t.customerPhone)],
       );
     }
     try {
       const { sendPushToPhones } = await import("./push-server");
       const saver = digits(context.userId.replace(/^vaani-/, ""));
       const buyer = digits(t.customerPhone);
-      const vendorTen = digits(t.vendorPhone || "") || (String(t.vendorId).match(/(\d{10})/)?.[1] ?? "");
       const targets: string[] = [];
       if (t.status !== "draft") {
         if (saver && saver === buyer && vendorTen && vendorTen !== saver) targets.push(vendorTen);
@@ -696,21 +700,33 @@ export const listIncomingTickets = createServerFn({ method: "POST" })
   .middleware([vaaniGate])
   .validator((input: { vendorId: string }) => input)
   .handler(async ({ context, data }) => {
-    if (!data.vendorId) return [];
     const sql = await getSql();
     await ensureVaaniSchema(sql);
+    const loginTen = digits(String(context.userId || "").replace(/^vaani-/, ""));
     const profile = await sql<{ phone: string }>`
       select phone from vaani_profiles where user_id = ${context.userId}
     `;
-    const mine = phoneDigits(profile[0]?.phone || "");
-    const rows = await sql<{ payload: Ticket | string }>`
-      select payload from vaani_tickets
-      where vendor_id = ${data.vendorId}
-      order by created_at desc
-    `;
+    const mine = loginTen.length === 10 ? loginTen : phoneDigits(profile[0]?.phone || "");
+    const myInbox = loginTen.length === 10 ? inboxIdForUser(`vaani-${loginTen}`) : data.vendorId;
+    const rows = await sql.query<{ payload: Ticket | string; vendor_id: string }>(
+      `select payload, vendor_id from vaani_tickets order by created_at desc`,
+    );
     return rows
-      .map((r) => parseTicket(r.payload))
-      .filter((t) => !mine || phoneDigits(t.customerPhone) !== mine);
+      .map((r) => ({ ticket: parseTicket(r.payload), vendorId: r.vendor_id }))
+      .filter(({ ticket, vendorId }) => {
+        if (ticket.status === "draft") return false;
+        const vTen = digits(ticket.vendorPhone || "") || String(vendorId || ticket.vendorId).match(/(\d{10})/)?.[1] || "";
+        const forMe =
+          vendorId === data.vendorId ||
+          vendorId === myInbox ||
+          ticket.vendorId === data.vendorId ||
+          ticket.vendorId === myInbox ||
+          (mine.length === 10 && vTen === mine);
+        if (!forMe) return false;
+        if (mine && phoneDigits(ticket.customerPhone) === mine) return false;
+        return true;
+      })
+      .map(({ ticket }) => ticket);
   });
 
 export const listTickets = createServerFn({ method: "GET" })
