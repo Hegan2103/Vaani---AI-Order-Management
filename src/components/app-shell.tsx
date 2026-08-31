@@ -6,7 +6,7 @@ import { resetLoginGate, isSignedOut } from "@/components/login-screen";
 import { VendorHome } from "@/components/vendor-home";
 import { CallScreen } from "@/routes/call.$vendorId";
 import { Button } from "@/components/ui/button";
-import { fireReminderPush, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
+import { fireReminderPush, listPublicVendors, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
 import { cn } from "@/lib/cn";
 import { unlockBeep, playBeep, diffTicketEvents } from "@/lib/vaani/notify";
 import { enablePush, showLocalPopup } from "@/lib/vaani/push-client";
@@ -28,6 +28,8 @@ import {
   rememberLoginTen,
   restoreLocalAccount,
   applyDirContacts,
+  listedVendors,
+  rememberListedVendor,
   readShopIdentity,
   tenFromEmail,
   useVaani,
@@ -98,6 +100,21 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     useVaani.getState().setHydrated(true);
     useVaani.getState().setAccountReady(true);
   }, [seedPhone]);
+
+  useEffect(() => {
+    void listPublicVendors()
+      .then((rows) => {
+        if (!Array.isArray(rows) || isSignedOut()) return;
+        for (const r of rows) {
+          if (!r.shopName || r.ten.length !== 10) continue;
+          rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
+        }
+        setLiveVendors(listedVendors());
+      })
+      .catch(() => {
+        /* local listings */
+      });
+  }, [setLiveVendors]);
 
   useEffect(() => {
     const dump = () => {

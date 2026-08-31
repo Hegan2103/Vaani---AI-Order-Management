@@ -171,7 +171,31 @@ export const verifyOtp = createServerFn({ method: "POST" })
     }
   });
 
-export const loadProfile = createServerFn({ method: "GET" })
+export const listPublicVendors = createServerFn({ method: "GET" })
+  .middleware([vaaniGate])
+  .handler(async () => {
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql.query<{
+      user_id: string;
+      shop_name: string;
+      phone: string;
+      industry: string;
+    }>(`select user_id, shop_name, phone, industry from vaani_profiles`);
+    return rows
+      .map((r) => {
+        const fromUser = digits(String(r.user_id || "").replace(/^vaani-/, ""));
+        const fromPhone = digits(r.phone || "");
+        const ten =
+          fromUser.length === 10 ? fromUser : fromPhone.length >= 10 ? fromPhone.slice(-10) : fromPhone;
+        return {
+          ten,
+          shopName: (r.shop_name || "").trim(),
+          industry: (r.industry || "") as Industry | "",
+        };
+      })
+      .filter((r) => r.ten.length === 10 && r.shopName);
+  });
   .middleware([vaaniGate])
   .handler(async ({ context }) => {
     const sql = await getSql();

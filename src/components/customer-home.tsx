@@ -201,8 +201,8 @@ export function CustomerHome() {
             ten.length === 10 && ten !== meTen
               ? {
                   id: found?.id || `u-vaani-${ten}`,
-                  name: (c.name || found?.shop || "").trim() || `Shop ${ten}`,
-                  shop: (c.name || found?.shop || "").trim() || `Shop ${ten}`,
+                  name: (found?.shop || found?.name || c.name || "").trim() || `Shop ${ten}`,
+                  shop: (found?.shop || "").trim() || `Shop ${ten}`,
                   phone: formatInPhone(ten),
                   city: "",
                   industry: found?.industry || "grocery",
@@ -306,10 +306,14 @@ export function CustomerHome() {
                         const byPhone = row.vendorPhone ? vendorForPhone(row.vendorPhone) : undefined;
                         const vend = byPhone || vendorById(row.vendorId);
                         const vTen = (row.vendorPhone || vend?.phone || "").replace(/\D/g, "").slice(-10);
-                        let title = vend?.shop || vend?.name || row.vendorShop || t("vendor");
-                        if (vTen && vTen !== meTen && title === (customerName || "").trim()) {
-                          title = `Shop ${vTen}`;
-                        }
+                        const listedName = (vend?.shop || vend?.name || "").trim();
+                        let title =
+                          listedName && listedName !== (customerName || "").trim()
+                            ? listedName
+                            : (row.vendorShop || "").trim() && row.vendorShop !== (customerName || "").trim()
+                              ? row.vendorShop
+                              : `Shop ${vTen || ""}`;
+                        if (title === (customerName || "").trim()) title = `Shop ${vTen}`;
                         const phone = vend?.phone || row.vendorPhone || "";
                         return (
                           <li key={row.id} className="flex items-center gap-2">
