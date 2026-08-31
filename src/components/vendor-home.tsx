@@ -39,6 +39,7 @@ export function VendorHome() {
     const vendorId = inboxIdForUser(`vaani-${ten}`);
     void listIncomingTickets({ data: { vendorId } })
       .then((rows) => {
+        if (sessionStorage.getItem("vaani-signed-out") === "1") return;
         if (!Array.isArray(rows) || !rows.length) return;
         useVaani.setState({ incoming: mergeTicketLists(useVaani.getState().incoming, rows) });
       })

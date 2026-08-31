@@ -74,7 +74,7 @@ function markEntered() {
   window.dispatchEvent(new Event("vaani-auth"));
 }
 
-function isSignedOut() {
+export function isSignedOut() {
   if (signedOutLock) return true;
   try {
     return sessionStorage.getItem("vaani-signed-out") === "1";

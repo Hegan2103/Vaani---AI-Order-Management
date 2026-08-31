@@ -74,6 +74,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const loginTen = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone || "");
   useLayoutEffect(() => {
     const load = () => {
+      if (sessionStorage.getItem("vaani-signed-out") === "1") return;
       const next = pullIdentity();
       setId(next);
       if (!EDITING) {

@@ -2,7 +2,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Bell, Phone, Store } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CustomerHome } from "@/components/customer-home";
-import { resetLoginGate } from "@/components/login-screen";
+import { resetLoginGate, isSignedOut } from "@/components/login-screen";
 import { VendorHome } from "@/components/vendor-home";
 import { CallScreen } from "@/routes/call.$vendorId";
 import { Button } from "@/components/ui/button";
@@ -164,9 +164,11 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     if (me.length !== 10) return;
     let stop = false;
     async function tick() {
-      if (stop) return;
+      if (stop || isSignedOut()) return;
       try {
+        if (isSignedOut()) return;
         const remote = await listRemindersRemote({ data: { phone: me } });
+        if (stop || isSignedOut()) return;
         if (Array.isArray(remote) && remote.length) mergeReminders(remote as Reminder[]);
       } catch {
         /* local reminders */
@@ -379,11 +381,13 @@ function SignedInPhone({ phone }: { phone: string }) {
 }
 
 function AccountBar() {
-  const [busy, setBusy] = useState(false);
   const { t } = useT();
   function leave() {
-    setBusy(true);
-    writeAccountBackup();
+    try {
+      writeAccountBackup();
+    } catch {
+      /* ignore */
+    }
     try {
       sessionStorage.removeItem("vaani-session-ok");
     } catch {
@@ -391,12 +395,11 @@ function AccountBar() {
     }
     storeBearerToken(null);
     resetLoginGate();
-    setBusy(false);
   }
   return (
     <div className="flex items-center gap-2">
-      <Button type="button" size="sm" variant="outline" disabled={busy} onClick={leave}>
-        {busy ? t("signingOut") : t("signOut")}
+      <Button type="button" size="sm" variant="outline" onClick={leave}>
+        {t("signOut")}
       </Button>
     </div>
   );
