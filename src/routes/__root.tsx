@@ -21,15 +21,10 @@ export const Route = createRootRoute({
       }
       const ten = v.replace(/\D/g, "").slice(-10);
       if (ten.length === 10) return { entered: true as const, phone: ten };
-      if (typeof window === "undefined") {
-        const { readVaaniCookieTen } = await import("@/lib/vaani/entered.server");
-        const cookieTen = readVaaniCookieTen();
-        return { entered: cookieTen.length === 10, phone: cookieTen };
-      }
     } catch {
       /* ignore */
     }
-    return { entered: false as const };
+    return { entered: false as const, phone: "" };
   },
   head: () => ({
     meta: [
