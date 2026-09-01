@@ -143,6 +143,9 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       writeAccountBackup();
     };
     window.addEventListener("pagehide", dump);
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    }
     const arm = () => {
       unlockBeep();
       if (!pushAsked.current) {
@@ -185,7 +188,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     if (!events.length) return;
     pushNotices(events);
     playBeep();
-    for (const e of events) showLocalPopup(e.title, e.body);
+    for (const e of events) void showLocalPopup(e.title, e.body);
   }, [tickets, incoming, pushNotices]);
 
   useEffect(() => {
@@ -245,7 +248,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             audience: useVaani.getState().role,
           },
         ]);
-        showLocalPopup(r.contactName || "Reminder", r.message || r.contactName);
+        void showLocalPopup(r.contactName || "Reminder", r.message || r.contactName);
         playBeep();
       }
     }

@@ -13,10 +13,14 @@ export async function sendPushToPhones(
     const webpush = (await import("web-push")).default;
     webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
     const sql = await getSql();
-    const rows = await sql.query<{ endpoint: string; p256dh: string; auth: string }>(
-      `select endpoint, p256dh, auth from vaani_push where phone = any($1::text[])`,
-      [unique],
-    );
+    const rows: { endpoint: string; p256dh: string; auth: string }[] = [];
+    for (const phone of unique) {
+      const found = await sql.query<{ endpoint: string; p256dh: string; auth: string }>(
+        `select endpoint, p256dh, auth from vaani_push where phone = $1`,
+        [phone],
+      );
+      rows.push(...found);
+    }
     const payload = JSON.stringify({ title, body, url });
     await Promise.all(
       rows.map(async (row) => {

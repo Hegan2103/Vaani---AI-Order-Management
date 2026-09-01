@@ -10,17 +10,32 @@ function urlBase64ToUint8Array(base64: string) {
   return out;
 }
 
-export function showLocalPopup(title: string, body: string) {
-  if (typeof window === "undefined" || typeof Notification === "undefined") return;
-  if (Notification.permission !== "granted") return;
+export async function showLocalPopup(title: string, body: string) {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
   try {
+    if (Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+    if (Notification.permission !== "granted") return;
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      await reg.showNotification(title, {
+        body,
+        icon: "/favicon.svg",
+        badge: "/favicon.svg",
+        tag: `vaani-${Date.now()}`,
+        renotify: true,
+      });
+      return;
+    }
     const n = new Notification(title, { body, icon: "/favicon.svg" });
     n.onclick = () => {
       window.focus();
       n.close();
     };
   } catch {
-    /* ignore */
+    /* blocked */
   }
 }
 
