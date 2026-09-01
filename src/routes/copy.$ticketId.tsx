@@ -177,14 +177,6 @@ function CopyPage() {
           </section>
         ) : null}
 
-        {ticket.orderCopy ? (
-          <pre className="mt-8 whitespace-pre-wrap border-t border-line pt-5 font-sans text-sm leading-relaxed text-ink">
-            {ticket.orderCopy}
-          </pre>
-        ) : (
-          <p className="mt-8 text-sm text-muted">{t("copyWillAppear")}</p>
-        )}
-
         <p className="mt-8 text-xs text-subtle">
           {t("copyDisclaimer")}
         </p>
