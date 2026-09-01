@@ -111,8 +111,8 @@ function CopyPage() {
         <div className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted">{t("vendor")}</p>
-            <p className="font-medium">{vendor?.shop ?? t("vendor")}</p>
-            <p className="text-muted">{vendor?.name}</p>
+            <p className="font-medium">{vendor?.shop || vendor?.name || t("vendor")}</p>
+            {vendor?.name && vendor.name !== vendor.shop ? <p className="text-muted">{vendor.name}</p> : null}
             <p className="text-muted">{vendor?.phone}</p>
           </div>
           <div>
