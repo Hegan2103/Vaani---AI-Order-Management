@@ -114,6 +114,7 @@ export type Reminder = {
   to: string;
   notifyBoth: boolean;
   lastFired: string;
+  bells?: Record<string, string>;
   createdAt: string;
 };
 

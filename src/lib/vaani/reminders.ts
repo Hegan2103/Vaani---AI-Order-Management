@@ -39,8 +39,13 @@ export function mergeReminders(extra: Reminder[]) {
   const map = new Map(loadAll().map((r) => [r.id, r]));
   for (const r of extra) {
     const prev = map.get(r.id);
-    if (!prev || (r.lastFired || "") > (prev.lastFired || "")) map.set(r.id, r);
-    else map.set(r.id, prev);
+    if (!prev) {
+      map.set(r.id, r);
+      continue;
+    }
+    const newer = (r.lastFired || "") > (prev.lastFired || "") ? r : prev;
+    const older = newer === r ? prev : r;
+    map.set(r.id, { ...newer, bells: { ...(older.bells || {}), ...(newer.bells || {}) } });
   }
   saveAll([...map.values()]);
 }
@@ -84,8 +89,24 @@ export function markFired(id: string) {
 export function reminderTargets(row: Reminder): string[] {
   const owner = phoneDigits(row.ownerTen);
   const other = phoneDigits(row.contactTen);
-  if (row.notifyBoth && other && other !== owner) return [owner, other].filter((t) => t.length === 10);
-  return owner.length === 10 ? [owner] : [];
+  const out = [owner, other].filter((t) => t.length === 10);
+  return [...new Set(out)];
+}
+
+export function reminderNeedsBell(row: Reminder, me: string): boolean {
+  const ten = phoneDigits(me);
+  if (ten.length !== 10 || !reminderTargets(row).includes(ten)) return false;
+  const today = todayStamp();
+  if ((row.lastFired || "") !== today) return false;
+  return (row.bells || {})[ten] !== today;
+}
+
+export function markBellSeen(id: string, ten: string) {
+  const all = loadAll().map((r) => {
+    if (r.id !== id) return r;
+    return { ...r, bells: { ...(r.bells || {}), [phoneDigits(ten)]: todayStamp() } };
+  });
+  saveAll(all);
 }
 
 export function blankReminder(

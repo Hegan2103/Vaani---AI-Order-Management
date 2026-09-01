@@ -334,7 +334,7 @@ export function CustomerHome() {
               </div>
               <div className="flex shrink-0 items-center gap-2">
               {ten.length === 10 && ten !== meTen ? (
-                <ReminderButton contactName={c.name} contactPhone={c.phone} notifyBoth={false} />
+                <ReminderButton contactName={c.name} contactPhone={c.phone} notifyBoth />
               ) : null}
               {ten === meTen ? (
                 <span className="text-xs text-subtle">{t("yourShop")}</span>

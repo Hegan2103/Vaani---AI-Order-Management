@@ -13,8 +13,10 @@ import { enablePush, showLocalPopup } from "@/lib/vaani/push-client";
 import {
   isReminderDue,
   listReminders,
+  markBellSeen,
   markFired,
   mergeReminders,
+  reminderNeedsBell,
   reminderTargets,
   upsertReminder,
 } from "@/lib/vaani/reminders";
@@ -187,7 +189,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   }, [tickets, incoming, pushNotices]);
 
   useEffect(() => {
-    const me = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
+    const me = liveLoginTen() || readLoginTen();
     if (me.length !== 10) return;
     let stop = false;
     async function tick() {
@@ -204,48 +206,56 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       for (const r of due) {
         const stamp = new Date().toISOString().slice(0, 10);
         markFired(r.id);
-        const next = { ...r, lastFired: stamp };
+        const next = { ...r, lastFired: stamp, bells: r.bells || {} };
         upsertReminder(next);
         try {
           await saveReminder({ data: { reminder: next } });
         } catch {
           /* local */
         }
-        const targets = reminderTargets(r);
-        if (targets.includes(me)) {
-          pushNotices([
-            {
-              id: crypto.randomUUID(),
-              at: new Date().toISOString(),
-              title: r.contactName || "Reminder",
-              body: r.message || r.contactName,
-              ticketId: `reminder:${r.id}`,
-              read: false,
-              audience: useVaani.getState().role,
-            },
-          ]);
-          showLocalPopup(r.contactName || "Reminder", r.message || r.contactName);
-          playBeep();
-        }
-        const others = targets.filter((p) => p !== me);
+        const others = reminderTargets(r).filter((p) => p !== me);
         if (others.length) {
           try {
             await fireReminderPush({
               data: { phones: others, title: r.contactName || "Reminder", body: r.message || r.contactName },
             });
           } catch {
-            /* local */
+            /* in-app still */
           }
         }
       }
+      for (const r of listReminders().filter((row) => reminderNeedsBell(row, me))) {
+        markBellSeen(r.id, me);
+        const bells = { ...(r.bells || {}), [me]: new Date().toISOString().slice(0, 10) };
+        const next = { ...r, bells };
+        upsertReminder(next);
+        try {
+          await saveReminder({ data: { reminder: next } });
+        } catch {
+          /* local */
+        }
+        pushNotices([
+          {
+            id: crypto.randomUUID(),
+            at: new Date().toISOString(),
+            title: r.contactName || "Reminder",
+            body: r.message || r.contactName,
+            ticketId: `reminder:${r.id}`,
+            read: false,
+            audience: useVaani.getState().role,
+          },
+        ]);
+        showLocalPopup(r.contactName || "Reminder", r.message || r.contactName);
+        playBeep();
+      }
     }
     void tick();
-    const id = window.setInterval(() => void tick(), 30000);
+    const id = window.setInterval(() => void tick(), 8000);
     return () => {
       stop = true;
       window.clearInterval(id);
     };
-  }, [customerPhone, pushNotices]);
+  }, [pushNotices]);
 
   return (
     <div className="min-h-dvh bg-bg text-ink">
