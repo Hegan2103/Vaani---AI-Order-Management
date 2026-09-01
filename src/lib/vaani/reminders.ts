@@ -89,8 +89,10 @@ export function markFired(id: string) {
 export function reminderTargets(row: Reminder): string[] {
   const owner = phoneDigits(row.ownerTen);
   const other = phoneDigits(row.contactTen);
-  const out = [owner, other].filter((t) => t.length === 10);
-  return [...new Set(out)];
+  if (row.notifyBoth) {
+    return other.length === 10 && other !== owner ? [other] : [];
+  }
+  return [...new Set([owner, other].filter((t) => t.length === 10))];
 }
 
 export function reminderNeedsBell(row: Reminder, me: string): boolean {
