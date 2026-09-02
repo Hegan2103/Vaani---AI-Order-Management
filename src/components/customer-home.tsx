@@ -40,6 +40,9 @@ export function CustomerHome() {
   const { t, industry: tradeLabel, locale } = useT();
 
   const meTen = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
+  const sent = tickets.filter(
+    (t) => meTen.length !== 10 || phoneDigits(t.customerPhone) === meTen,
+  );
 
   useEffect(() => {
     const rows = readDirContacts();
@@ -53,7 +56,9 @@ export function CustomerHome() {
       void listTickets()
         .then((rows) => {
           if (!Array.isArray(rows) || !rows.length) return;
-          useVaani.setState({ tickets: mergeTicketLists(useVaani.getState().tickets, rows) });
+          const mine = rows.filter((t) => phoneDigits(t.customerPhone) === meTen);
+          if (!mine.length) return;
+          useVaani.setState({ tickets: mergeTicketLists(useVaani.getState().tickets, mine) });
         })
         .catch(() => {
           /* local tickets */
@@ -415,7 +420,7 @@ export function CustomerHome() {
         </div>
       )}
 
-      {tickets.length > 0 ? (
+      {sent.length > 0 ? (
         <section className="mt-10">
           <h2 className="mb-3 font-display text-2xl tracking-tight">{t("yourRequests")}</h2>
           <OrderDateFilter value={dateFilter} onChange={setDateFilter} />
