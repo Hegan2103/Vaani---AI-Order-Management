@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { getTicket, lookupVendorByPhone, saveTicket } from "@/lib/vaani/account";
 import { composeOrderCopy } from "@/lib/vaani/ai";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, mergeOneTicket, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { shopNameForTen, listedVendors, mergeOneTicket, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import { phoneDigits } from "@/lib/vaani/seed";
 import type { LineItem, Ticket, TicketStatus } from "@/lib/vaani/types";
 
@@ -199,7 +199,9 @@ function TicketPage() {
       <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl tracking-tight md:text-4xl">
-            {role === "vendor" ? ticket.customerName || t("customer") : customerVendorTitle}
+            {role === "vendor"
+              ? shopNameForTen(ticket.customerPhone, ticket.customerName || t("customer"))
+              : customerVendorTitle}
           </h1>
           <p className="text-sm text-muted">
             {role === "vendor" ? ticket.customerPhone : ticket.vendorPhone || vendor?.phone || ""}

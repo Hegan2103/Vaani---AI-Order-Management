@@ -825,6 +825,14 @@ export function shopNameForTen(ten: string, fallback = "") {
   } catch {
     /* ignore */
   }
+  try {
+    const buyers = JSON.parse(localStorage.getItem("vaani-listed-buyers-v1") || "{}") as Record<string, string>;
+    if ((buyers[t] || "").trim() && buyers[t] !== t) return buyers[t].trim();
+  } catch {
+    /* ignore */
+  }
+  const listed = vendorForPhone(t);
+  if (listed?.shop && !/^Shop\s*\d{10}$/i.test(listed.shop)) return listed.shop.trim();
   return fallback || `Shop ${t}`;
 }
 
