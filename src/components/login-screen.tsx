@@ -189,11 +189,6 @@ export function LoginGate({ children, startOn }: { children: ReactNode; startOn?
     if (typeof window !== "undefined" && isSignedOut()) return false;
     return Boolean(startOn);
   });
-  const [phoneOk, setPhoneOk] = useState(true);
-
-  useLayoutEffect(() => {
-    setPhoneOk(/Android|iPhone|iPod/i.test(navigator.userAgent));
-  }, []);
 
   useLayoutEffect(() => {
     const lang = useVaani.getState().language || readUiLanguage();
@@ -232,17 +227,6 @@ export function LoginGate({ children, startOn }: { children: ReactNode; startOn?
       window.removeEventListener("vaani-auth", sync);
     };
   }, [startOn]);
-
-  if (!phoneOk) {
-    return (
-      <div className="grid min-h-dvh place-items-center bg-bg px-6">
-        <div className="max-w-md rounded-[var(--radius-xl)] border-2 border-accent bg-surface p-8 text-center shadow-lg">
-          <p className="font-display text-3xl tracking-tight">Vaani</p>
-          <p className="mt-4 text-lg font-semibold text-ink">Kindly login via Phone Browser</p>
-        </div>
-      </div>
-    );
-  }
 
   if (!on) {
     return (
