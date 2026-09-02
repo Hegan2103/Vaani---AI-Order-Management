@@ -32,6 +32,7 @@ import {
   applyDirContacts,
   bookNameFor,
   listedVendors,
+  forgetListedVendor,
   rememberListedVendor,
   rememberListedBuyer,
   readShopIdentity,
@@ -119,7 +120,10 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
           for (const r of rows) {
             if (!r.shopName || r.ten.length !== 10) continue;
             if (r.isVendor) rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
-            else rememberListedBuyer({ shopName: r.shopName, phone: r.ten });
+            else {
+              forgetListedVendor(r.ten);
+              rememberListedBuyer({ shopName: r.shopName, phone: r.ten });
+            }
           }
           setLiveVendors(listedVendors());
         })
