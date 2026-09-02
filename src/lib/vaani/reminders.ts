@@ -90,9 +90,9 @@ export function reminderTargets(row: Reminder): string[] {
   const owner = phoneDigits(row.ownerTen);
   const other = phoneDigits(row.contactTen);
   if (row.notifyBoth) {
-    return other.length === 10 && other !== owner ? [other] : [];
+    return [...new Set([owner, other].filter((t) => t.length === 10))];
   }
-  return [...new Set([owner, other].filter((t) => t.length === 10))];
+  return other.length === 10 && other !== owner ? [other] : [];
 }
 
 export function reminderNeedsBell(row: Reminder, me: string): boolean {
