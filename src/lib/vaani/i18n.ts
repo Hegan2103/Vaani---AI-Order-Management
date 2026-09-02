@@ -200,6 +200,7 @@ const EN = {
   hardware: "Hardware",
   construction: "Construction",
   electronics: "Electronics",
+  consumer: "Consumer / Household",
 
   pending: "Pending",
   sent: "Sent",
@@ -402,6 +403,7 @@ const HI: Record<UiKey, string> = {
   hardware: "हार्डवेयर",
   construction: "निर्माण",
   electronics: "इलेक्ट्रॉनिक्स",
+  consumer: "उपभोक्ता / घर",
   pending: "लंबित",
   sent: "भेजा",
   reviewing: "जाँच",
@@ -606,6 +608,7 @@ const GU: Record<UiKey, string> = {
   hardware: "હાર્ડવેર",
   construction: "બાંધકામ",
   electronics: "ઇલેક્ટ્રોનિક્સ",
+  consumer: "ગ્રાહક / ઘર",
   pending: "બાકી",
   sent: "મોકલ્યું",
   reviewing: "તપાસ",
@@ -805,6 +808,7 @@ const MR: Record<UiKey, string> = {
   hardware: "हार्डवेअर",
   construction: "बांधकाम",
   electronics: "इलेक्ट्रॉनिक्स",
+  consumer: "ग्राहक / घर",
   pending: "प्रलंबित",
   sent: "पाठवले",
   reviewing: "तपासणी",
@@ -1004,6 +1008,7 @@ const BN: Record<UiKey, string> = {
   hardware: "হার্ডওয়্যার",
   construction: "নির্মাণ",
   electronics: "ইলেকট্রনিক্স",
+  consumer: "ভোক্তা / ঘর",
   pending: "অপেক্ষমাণ",
   sent: "পাঠানো",
   reviewing: "পর্যালোচনা",
@@ -1203,6 +1208,7 @@ const TA: Record<UiKey, string> = {
   hardware: "ஹார்ட்வேர்",
   construction: "கட்டுமானம்",
   electronics: "எலக்ட்ரானிக்ஸ்",
+  consumer: "நுகர்வோர் / வீடு",
   pending: "நிலுவை",
   sent: "அனுப்பப்பட்டது",
   reviewing: "சரிபார்ப்பு",
@@ -1260,6 +1266,7 @@ const INDUSTRY_KEYS: Record<Industry, UiKey> = {
   hardware: "hardware",
   construction: "construction",
   electronics: "electronics",
+  consumer: "consumer",
 };
 
 export function industryLabel(lang: string, id: Industry | "" | undefined) {

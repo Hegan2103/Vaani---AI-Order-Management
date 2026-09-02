@@ -76,6 +76,7 @@ const catalogs: Record<Industry, CatalogItem[]> = {
   hardware,
   construction,
   electronics,
+  consumer: grocery,
 };
 
 export const INDUSTRY_LABEL: Record<Industry, string> = {
@@ -85,6 +86,7 @@ export const INDUSTRY_LABEL: Record<Industry, string> = {
   hardware: "Hardware",
   construction: "Construction",
   electronics: "Electronics",
+  consumer: "Consumer / Household",
 };
 
 export const LANGUAGES = [
@@ -217,6 +219,11 @@ export const SAMPLE_UTTERANCES: Record<Industry, string[]> = {
     "USB cable 10 piece aur charger ka cost",
     "Earphone 5 piece",
     "Power bank ka rate",
+  ],
+  consumer: [
+    "Aata 5 kg, doodh 2 litre, chini ka rate",
+    "Chawal 10 kg aur tel 1 litre",
+    "Namak 1 kg, haldi 200 gram",
   ],
 };
 
@@ -390,6 +397,19 @@ export function demoIncomingFor(vendorId: string): Ticket[] {
             line("d1", "order", "Type C cable", 15, "piece", "Type C cable 15 piece"),
             line("d2", "inquiry", "20 watt charger", null, "piece", "20 watt charger ka cost"),
             line("d3", "order", "earphones", 8, "piece", "earphones 8 piece"),
+          ],
+        },
+      ],
+      consumer: [
+        {
+          name: "Home Order",
+          phone: "+91 98711 55667",
+          language: "hi",
+          transcript: "Aata 5 kilo, doodh 2 litre, chini ka rate",
+          lines: [
+            line("d1", "order", "Aata", 5, "kg", "Aata 5 kilo"),
+            line("d2", "order", "doodh", 2, "litre", "doodh 2 litre"),
+            line("d3", "inquiry", "chini", null, "kg", "chini ka rate"),
           ],
         },
       ],

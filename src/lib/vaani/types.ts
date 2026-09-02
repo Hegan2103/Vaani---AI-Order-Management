@@ -4,7 +4,8 @@ export type Industry =
   | "electrical"
   | "hardware"
   | "construction"
-  | "electronics";
+  | "electronics"
+  | "consumer";
 
 export type Role = "customer" | "vendor";
 
