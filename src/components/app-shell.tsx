@@ -30,6 +30,7 @@ import {
   rememberLoginTen,
   restoreLocalAccount,
   applyDirContacts,
+  bookNameFor,
   listedVendors,
   rememberListedVendor,
   readShopIdentity,
@@ -237,18 +238,22 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         } catch {
           /* local */
         }
+        const owner = phoneDigits(r.ownerTen);
+        const contact = phoneDigits(r.contactTen);
+        const other = me === owner ? contact : owner;
+        const label = bookNameFor(other, r.contactName) || r.contactName || "Reminder";
         pushNotices([
           {
             id: crypto.randomUUID(),
             at: new Date().toISOString(),
-            title: r.contactName || "Reminder",
-            body: r.message || r.contactName,
+            title: label,
+            body: r.message || label,
             ticketId: `reminder:${r.id}`,
             read: false,
             audience: useVaani.getState().role,
           },
         ]);
-        void showLocalPopup(r.contactName || "Reminder", r.message || r.contactName);
+        void showLocalPopup(label, r.message || label);
         playBeep();
       }
     }
