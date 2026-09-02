@@ -138,7 +138,7 @@ export function directoryRows(meTen = ""): Contact[] {
     if (ten.length !== 10 || ten === me) return;
     const book = (names[ten] || "").trim();
     const raw = (c.name || "").trim();
-    if (!book && raw && !isShopFallbackName(raw, ten)) {
+    if (!book && raw && c.source === "phone" && !isShopFallbackName(raw, ten)) {
       names[ten] = raw;
     }
     const label = (names[ten] || "").trim() || raw;
