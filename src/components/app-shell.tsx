@@ -262,8 +262,8 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
 
   return (
     <div className="min-h-dvh bg-bg text-ink">
-      <header className="no-print sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+      <header className="no-print sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur-sm pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-[max(1rem,env(safe-area-inset-right))] py-3 pl-[max(1rem,env(safe-area-inset-left))]">
           <Link to="/" className="flex items-baseline gap-2">
             <span className="font-display text-xl tracking-tight">Vaani</span>
             <span className="hidden text-xs text-muted sm:inline">{t("voiceOrders")}</span>
@@ -377,7 +377,7 @@ function NoticeBell() {
         ) : null}
       </Button>
       {open ? (
-        <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg">
+        <div className="fixed left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top)+4.25rem)] z-30 max-h-[min(20rem,calc(100dvh-7rem))] overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-h-80">
           <p className="border-b border-line px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted">
             {t("notifications")}
           </p>
