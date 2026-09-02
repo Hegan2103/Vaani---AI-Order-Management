@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { listTickets } from "@/lib/vaani/account";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { bookNameFor, isListedBuyer, listedVendors, liveLoginTen, mergeTicketLists, readBookNames, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { bookNameFor, isListedBuyer, liveLoginTen, mergeTicketLists, readBookNames, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -85,19 +85,6 @@ export function CustomerHome() {
         }));
     }
     rows = rows.map((c) => ({ ...c, name: bookNameFor(c.phone, c.name) }));
-    const seen = new Set(rows.map((c) => phoneDigits(c.phone)).filter((n) => n.length === 10));
-    for (const v of listedVendors()) {
-      const ten = phoneDigits(v.phone);
-      if (ten.length !== 10 || ten === meTen || seen.has(ten)) continue;
-      seen.add(ten);
-      rows.push({
-        id: v.id,
-        name: bookNameFor(ten, v.shop || v.name),
-        phone: v.phone,
-        vendorId: v.id,
-        source: "vaani",
-      });
-    }
     return rows.filter((c) => {
       const v = vendorForPhone(c.phone);
       if (industry !== "all" && v?.industry && v.industry !== industry) return false;
