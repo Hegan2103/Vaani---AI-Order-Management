@@ -92,7 +92,7 @@ export function reminderTargets(row: Reminder): string[] {
   if (row.notifyBoth) {
     return [...new Set([owner, other].filter((t) => t.length === 10))];
   }
-  return other.length === 10 && other !== owner ? [other] : [];
+  return owner.length === 10 ? [owner] : [];
 }
 
 export function reminderNeedsBell(row: Reminder, me: string): boolean {
