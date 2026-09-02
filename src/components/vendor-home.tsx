@@ -14,7 +14,7 @@ import {
 import { ShopCard } from "@/components/shop-card";
 import { ReminderButton } from "@/components/reminder-dialog";
 import { useT } from "@/lib/vaani/i18n";
-import { bookNameFor, mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
+import { applyDirContacts, bookNameFor, mergeTicketLists, readAccountBackup, readBookNames, readDirContacts, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
   const incoming = useVaani((s) => s.incoming);
@@ -32,6 +32,28 @@ export function VendorHome() {
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
   const inbox = incoming.filter((t) => t.status !== "draft" && !isOwnCustomerOrder(t, ten));
+  useEffect(() => {
+    applyDirContacts();
+  }, []);
+
+  const bookRows = (() => {
+    const dir = readDirContacts();
+    const names = readBookNames();
+    const base = (dir && dir.length ? dir : contacts).filter(
+      (c) => phoneDigits(c.phone).length === 10 && phoneDigits(c.phone) !== ten,
+    );
+    const seen = new Set(base.map((c) => phoneDigits(c.phone)));
+    const extra = Object.entries(names)
+      .filter(([n]) => n.length === 10 && n !== ten && !seen.has(n))
+      .map(([n, name]) => ({
+        id: `book-${n}`,
+        name,
+        phone: formatInPhone(n),
+        source: "phone" as const,
+      }));
+    return [...base, ...extra].slice(0, 40);
+  })();
+
   useEffect(() => {
     if (ten.length !== 10) return;
     const local = mergeTicketLists(readVendorInbox(ten), readAccountBackup(ten)?.incoming ?? []);
@@ -68,22 +90,22 @@ export function VendorHome() {
         <ShopCard />
       </div>
 
-      {contacts.filter((c) => phoneDigits(c.phone).length === 10 && phoneDigits(c.phone) !== ten).length > 0 ? (
+      {bookRows.length > 0 ? (
         <section className="mb-8">
           <h2 className="mb-3 font-display text-2xl tracking-tight">{t("setReminder")}</h2>
           <ul className="divide-y divide-line rounded-[var(--radius-xl)] border border-line bg-surface">
-            {contacts
-              .filter((c) => phoneDigits(c.phone).length === 10 && phoneDigits(c.phone) !== ten)
-              .slice(0, 40)
-              .map((c) => (
+            {bookRows.map((c) => {
+              const label = bookNameFor(c.phone, c.name);
+              return (
                 <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{bookNameFor(c.phone, c.name)}</p>
+                    <p className="truncate font-medium">{label}</p>
                     <p className="truncate text-xs text-muted">{formatInPhone(phoneDigits(c.phone))}</p>
                   </div>
-                  <ReminderButton contactName={c.name} contactPhone={c.phone} notifyBoth />
+                  <ReminderButton contactName={label} contactPhone={c.phone} notifyBoth />
                 </li>
-              ))}
+              );
+            })}
           </ul>
         </section>
       ) : null}
