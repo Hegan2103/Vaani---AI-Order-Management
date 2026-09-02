@@ -132,7 +132,7 @@ export function VendorHome() {
                           className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-line bg-surface px-4 py-4"
                         >
                           <Link to="/ticket/$ticketId" params={{ ticketId: row.id }} className="min-w-0 flex-1">
-                            <p className="font-medium">{bookNameFor(row.customerPhone, row.customerName || t("customer"))}</p>
+                            <p className="font-medium">{row.customerName || t("customer")}</p>
                             <p className="truncate text-xs text-muted">
                               {t("linesCount", { n: row.lines.length })} · {row.customerPhone} ·{" "}
                               {new Date(row.createdAt).toLocaleString(locale)}
