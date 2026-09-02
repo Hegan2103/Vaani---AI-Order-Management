@@ -86,7 +86,6 @@ export const INDUSTRY_LABEL: Record<Industry, string> = {
   hardware: "Hardware",
   construction: "Construction",
   electronics: "Electronics",
-  consumer: "Consumer / Household",
 };
 
 export const LANGUAGES = [
