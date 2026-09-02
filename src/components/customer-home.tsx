@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { listTickets } from "@/lib/vaani/account";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { listedVendors, liveLoginTen, mergeTicketLists, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { bookNameFor, listedVendors, liveLoginTen, mergeTicketLists, readBookNames, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -68,6 +68,18 @@ export function CustomerHome() {
     const dir = readDirContacts();
     const book = dir ?? contacts.filter((c) => c.source === "phone");
     let rows = dir != null || book.length ? [...book] : [...contacts];
+    const names = readBookNames();
+    if (!rows.length && Object.keys(names).length) {
+      rows = Object.entries(names)
+        .filter(([ten]) => ten.length === 10)
+        .map(([ten, name]) => ({
+          id: `book-${ten}`,
+          name,
+          phone: formatInPhone(ten),
+          source: "phone" as const,
+        }));
+    }
+    rows = rows.map((c) => ({ ...c, name: bookNameFor(c.phone, c.name) }));
     const seen = new Set(rows.map((c) => phoneDigits(c.phone)).filter((n) => n.length === 10));
     for (const v of listedVendors()) {
       const ten = phoneDigits(v.phone);
@@ -75,7 +87,7 @@ export function CustomerHome() {
       seen.add(ten);
       rows.push({
         id: v.id,
-        name: v.shop || v.name,
+        name: bookNameFor(ten, v.shop || v.name),
         phone: v.phone,
         vendorId: v.id,
         source: "vaani",

@@ -9,6 +9,7 @@ const BACKUP_KEY = "vaani-account-backup-v1";
 const LOGIN_PHONE_KEY = "vaani-login-phone";
 const DIR_KEY = "vaani-dir-contacts";
 const DIR_FLAG = "vaani-dir-pulled";
+const BOOK_KEY = "vaani-phonebook-names";
 const LISTED_KEY = "vaani-listed-vendors-v1";
 const LANG_KEY = "vaani-ui-language";
 
@@ -82,7 +83,43 @@ export function writeDirContacts(rows: Contact[]) {
   } catch {
     /* ignore */
   }
+  const names = readBookNames();
+  for (const c of rows) {
+    const ten = phoneDigits(c.phone);
+    const label = (c.name || "").trim();
+    if (ten.length === 10 && label && c.source === "phone") names[ten] = label;
+  }
+  writeBookNames(names);
   useVaani.setState({ contacts: rows });
+}
+
+export function readBookNames(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(BOOK_KEY) || sessionStorage.getItem(BOOK_KEY) || "{}";
+    const rows = JSON.parse(raw) as Record<string, string>;
+    return rows && typeof rows === "object" ? rows : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeBookNames(names: Record<string, string>) {
+  if (typeof window === "undefined") return;
+  const raw = JSON.stringify(names);
+  try {
+    localStorage.setItem(BOOK_KEY, raw);
+    sessionStorage.setItem(BOOK_KEY, raw);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function bookNameFor(phone: string, fallback = "") {
+  const ten = phoneDigits(phone);
+  if (ten.length !== 10) return fallback;
+  const label = (readBookNames()[ten] || "").trim();
+  return label || fallback;
 }
 
 export function readDirContacts(): Contact[] | null {
@@ -101,8 +138,21 @@ export function readDirContacts(): Contact[] | null {
 
 export function applyDirContacts() {
   const rows = readDirContacts();
-  if (rows == null) return false;
-  useVaani.setState({ contacts: rows });
+  if (rows && rows.length) {
+    useVaani.setState({ contacts: rows });
+    return true;
+  }
+  const names = readBookNames();
+  const tens = Object.keys(names).filter((t) => t.length === 10);
+  if (!tens.length) return false;
+  useVaani.setState({
+    contacts: tens.map((ten) => ({
+      id: `book-${ten}`,
+      name: names[ten],
+      phone: formatInPhone(ten),
+      source: "phone" as const,
+    })),
+  });
   return true;
 }
 

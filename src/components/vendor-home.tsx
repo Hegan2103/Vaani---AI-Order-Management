@@ -14,7 +14,7 @@ import {
 import { ShopCard } from "@/components/shop-card";
 import { ReminderButton } from "@/components/reminder-dialog";
 import { useT } from "@/lib/vaani/i18n";
-import { mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
+import { bookNameFor, mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
   const incoming = useVaani((s) => s.incoming);
@@ -78,7 +78,7 @@ export function VendorHome() {
               .map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{c.name}</p>
+                    <p className="truncate font-medium">{bookNameFor(c.phone, c.name)}</p>
                     <p className="truncate text-xs text-muted">{formatInPhone(phoneDigits(c.phone))}</p>
                   </div>
                   <ReminderButton contactName={c.name} contactPhone={c.phone} notifyBoth />
