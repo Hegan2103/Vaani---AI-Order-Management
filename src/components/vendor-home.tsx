@@ -14,7 +14,7 @@ import {
 import { ShopCard } from "@/components/shop-card";
 import { ReminderButton } from "@/components/reminder-dialog";
 import { useT } from "@/lib/vaani/i18n";
-import { applyDirContacts, bookNameFor, mergeTicketLists, readAccountBackup, readBookNames, readDirContacts, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
+import { applyDirContacts, bookNameFor, directoryRows, mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
   const incoming = useVaani((s) => s.incoming);
@@ -36,23 +36,7 @@ export function VendorHome() {
     applyDirContacts();
   }, []);
 
-  const bookRows = (() => {
-    const dir = readDirContacts();
-    const names = readBookNames();
-    const base = (dir && dir.length ? dir : contacts).filter(
-      (c) => phoneDigits(c.phone).length === 10 && phoneDigits(c.phone) !== ten,
-    );
-    const seen = new Set(base.map((c) => phoneDigits(c.phone)));
-    const extra = Object.entries(names)
-      .filter(([n]) => n.length === 10 && n !== ten && !seen.has(n))
-      .map(([n, name]) => ({
-        id: `book-${n}`,
-        name,
-        phone: formatInPhone(n),
-        source: "phone" as const,
-      }));
-    return [...base, ...extra].slice(0, 40);
-  })();
+  const bookRows = directoryRows(ten).slice(0, 40);
 
   useEffect(() => {
     if (ten.length !== 10) return;

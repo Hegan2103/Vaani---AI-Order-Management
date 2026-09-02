@@ -87,7 +87,7 @@ export function writeDirContacts(rows: Contact[]) {
   for (const c of rows) {
     const ten = phoneDigits(c.phone);
     const label = (c.name || "").trim();
-    if (ten.length === 10 && label && c.source === "phone") names[ten] = label;
+    if (ten.length === 10 && label && !isShopFallbackName(label, ten)) names[ten] = label;
   }
   writeBookNames(names);
   useVaani.setState({ contacts: rows });
@@ -122,6 +122,47 @@ export function bookNameFor(phone: string, fallback = "") {
   return label || fallback;
 }
 
+function isShopFallbackName(label: string, ten: string) {
+  const n = (label || "").trim();
+  if (!n) return true;
+  return n === `Shop ${ten}` || /^Shop\s*\d{10}$/i.test(n);
+}
+
+export function directoryRows(meTen = ""): Contact[] {
+  if (typeof window === "undefined") return [];
+  const me = phoneDigits(meTen);
+  const names = readBookNames();
+  const map = new Map<string, Contact>();
+  const ingest = (c: { id?: string; name?: string; phone?: string; vendorId?: string; source?: Contact["source"] }) => {
+    const ten = phoneDigits(c.phone || "");
+    if (ten.length !== 10 || ten === me) return;
+    const book = (names[ten] || "").trim();
+    const raw = (c.name || "").trim();
+    if (!book && raw && !isShopFallbackName(raw, ten)) {
+      names[ten] = raw;
+    }
+    const label = (names[ten] || "").trim() || raw;
+    if (!label) return;
+    const prev = map.get(ten);
+    map.set(ten, {
+      id: prev?.id || c.id || `book-${ten}`,
+      name: (names[ten] || "").trim() || prev?.name || label,
+      phone: formatInPhone(ten),
+      vendorId: c.vendorId || prev?.vendorId,
+      source: names[ten] ? "phone" : c.source || prev?.source || "vaani",
+    });
+  };
+  for (const c of readDirContacts() || []) ingest(c);
+  try {
+    for (const c of useVaani.getState().contacts) ingest(c);
+  } catch {
+    /* store not ready */
+  }
+  for (const [ten, name] of Object.entries(names)) ingest({ id: `book-${ten}`, name, phone: ten, source: "phone" });
+  writeBookNames(names);
+  return [...map.values()];
+}
+
 export function readDirContacts(): Contact[] | null {
   if (typeof window === "undefined") return null;
   try {
@@ -136,7 +177,7 @@ export function readDirContacts(): Contact[] | null {
     for (const c of rows) {
       const ten = phoneDigits(c.phone);
       const label = (c.name || "").trim();
-      if (ten.length === 10 && label && c.source === "phone" && !names[ten]) {
+      if (ten.length === 10 && label && !isShopFallbackName(label, ten) && (c.source === "phone" || !names[ten])) {
         names[ten] = label;
         added = true;
       }
@@ -149,22 +190,9 @@ export function readDirContacts(): Contact[] | null {
 }
 
 export function applyDirContacts() {
-  const rows = readDirContacts();
-  if (rows && rows.length) {
-    useVaani.setState({ contacts: rows });
-    return true;
-  }
-  const names = readBookNames();
-  const tens = Object.keys(names).filter((t) => t.length === 10);
-  if (!tens.length) return false;
-  useVaani.setState({
-    contacts: tens.map((ten) => ({
-      id: `book-${ten}`,
-      name: names[ten],
-      phone: formatInPhone(ten),
-      source: "phone" as const,
-    })),
-  });
+  const rows = directoryRows(readLoginTen());
+  if (!rows.length) return false;
+  useVaani.setState({ contacts: rows });
   return true;
 }
 
@@ -911,10 +939,10 @@ export const useVaani = create<State>()(
       setClaimedVendor: (claimedVendorId) => set({ claimedVendorId }),
       setCallVendorId: (callVendorId) => set({ callVendorId }),
       setLiveVendors: (liveVendors) =>
-        set((s) => ({
-          liveVendors,
-          contacts: readDirContacts() ?? relink(s.contacts, liveVendors),
-        })),
+        set((s) => {
+          const rows = directoryRows(phoneDigits(s.customerPhone) || readLoginTen());
+          return { liveVendors, contacts: rows.length ? rows : relink(s.contacts, liveVendors) };
+        }),
       mergeContacts: (extra) =>
         set((s) => {
           const byDigits = new Map(s.contacts.map((c) => [phoneDigits(c.phone), c]));
