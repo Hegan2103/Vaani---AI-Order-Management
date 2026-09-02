@@ -130,7 +130,19 @@ export function readDirContacts(): Contact[] | null {
     if (flag !== "1" && !raw) return null;
     if (!raw) return [];
     const rows = JSON.parse(raw) as Contact[];
-    return Array.isArray(rows) ? rows : [];
+    if (!Array.isArray(rows)) return [];
+    const names = readBookNames();
+    let added = false;
+    for (const c of rows) {
+      const ten = phoneDigits(c.phone);
+      const label = (c.name || "").trim();
+      if (ten.length === 10 && label && c.source === "phone" && !names[ten]) {
+        names[ten] = label;
+        added = true;
+      }
+    }
+    if (added) writeBookNames(names);
+    return rows;
   } catch {
     return null;
   }
