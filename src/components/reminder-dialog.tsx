@@ -72,7 +72,7 @@ function ReminderForm({
   }
 
   async function save() {
-    const next = { ...row, notifyBoth, contactName, ownerTen, contactTen };
+    const next = { ...row, notifyBoth, contactName, ownerTen, contactTen, lastFired: "", bells: {} };
     upsertReminder(next);
     try {
       await saveReminder({ data: { reminder: next } });
