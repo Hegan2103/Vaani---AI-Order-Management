@@ -223,7 +223,10 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
           </select>
           <label className="mt-3 flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={sellDraft} onChange={(e) => setSellDraft(e.target.checked)} />
-            <span>{t("sellOnVaani")}</span>
+            <span>
+              <span className="font-medium">{t("sellOnVaaniShort")}</span>
+              <span className="mt-0.5 block text-xs text-muted">{t("sellOnVaani")}</span>
+            </span>
           </label>
           {shopMsg ? (
             <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>{shopMsg}</p>

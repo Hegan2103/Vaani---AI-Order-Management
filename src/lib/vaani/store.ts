@@ -465,7 +465,8 @@ export function writeShopIdentity(p: ShopIdentity) {
     const raw = JSON.stringify(clean);
     sessionStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
     localStorage.setItem(`${SHOP_KEY}:${ten}`, raw);
-    if (clean.shopName.trim()) rememberListedVendor(clean);
+    if (clean.isVendor) rememberListedVendor(clean);
+    else forgetListedVendor(ten);
   } catch {
     /* ignore */
   }
@@ -494,6 +495,58 @@ export function rememberListedVendor(p: { shopName: string; phone: string; indus
     const all = JSON.parse(localStorage.getItem(LISTED_KEY) || "{}") as Record<string, Vendor>;
     all[ten] = vendorFromListing(ten, shop, p.industry);
     localStorage.setItem(LISTED_KEY, JSON.stringify(all));
+    forgetListedBuyer(ten);
+  } catch {
+    /* ignore */
+  }
+}
+
+const BUYERS_KEY = "vaani-listed-buyers-v1";
+
+export function rememberListedBuyer(p: { shopName: string; phone: string }) {
+  if (typeof window === "undefined") return;
+  const ten = phoneDigits(p.phone);
+  if (ten.length !== 10) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(BUYERS_KEY) || "{}") as Record<string, string>;
+    all[ten] = (p.shopName || "").trim() || ten;
+    localStorage.setItem(BUYERS_KEY, JSON.stringify(all));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function forgetListedBuyer(phone: string) {
+  const ten = phoneDigits(phone);
+  if (ten.length !== 10 || typeof window === "undefined") return;
+  try {
+    const all = JSON.parse(localStorage.getItem(BUYERS_KEY) || "{}") as Record<string, string>;
+    delete all[ten];
+    localStorage.setItem(BUYERS_KEY, JSON.stringify(all));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isListedBuyer(phone: string) {
+  const ten = phoneDigits(phone);
+  if (ten.length !== 10 || typeof window === "undefined") return false;
+  try {
+    const all = JSON.parse(localStorage.getItem(BUYERS_KEY) || "{}") as Record<string, string>;
+    return Boolean(all[ten]);
+  } catch {
+    return false;
+  }
+}
+
+export function forgetListedVendor(phone: string) {
+  const ten = phoneDigits(phone);
+  if (ten.length !== 10 || typeof window === "undefined") return;
+  try {
+    const all = JSON.parse(localStorage.getItem(LISTED_KEY) || "{}") as Record<string, Vendor>;
+    delete all[ten];
+    localStorage.setItem(LISTED_KEY, JSON.stringify(all));
+    rememberListedBuyer({ shopName: "", phone: ten });
   } catch {
     /* ignore */
   }
@@ -518,6 +571,7 @@ export function listedVendors(): Vendor[] {
       const p = JSON.parse(localStorage.getItem(key) || "{}") as ShopIdentity;
       const stored = phoneDigits(p.phone);
       if (stored.length === 10 && stored !== ten) continue;
+      if (!p.isVendor) continue;
       put(ten, p.shopName, p.industry, true);
     }
   } catch {
@@ -530,6 +584,7 @@ export function listedVendors(): Vendor[] {
       if (ten.length !== 10) continue;
       const stored = phoneDigits(row.phone);
       if (stored.length === 10 && stored !== ten) continue;
+      if (!row.isVendor) continue;
       put(ten, row.shopName, row.industry);
     }
   } catch {
@@ -546,6 +601,7 @@ export function listedVendors(): Vendor[] {
       const stored = phoneDigits(p.phone);
       if (keyTen.length !== 10 || (stored.length === 10 && stored !== keyTen)) continue;
       if (!p.shopName?.trim()) continue;
+      if (!p.isVendor) continue;
       put(keyTen, p.shopName, p.industry);
     }
   } catch {

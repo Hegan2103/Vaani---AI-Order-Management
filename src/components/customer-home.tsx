@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { listTickets } from "@/lib/vaani/account";
 import { INDUSTRY_LABEL, VENDORS, allIndustrySamples, formatInPhone, phoneDigits, samplesFor } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
-import { bookNameFor, listedVendors, liveLoginTen, mergeTicketLists, readBookNames, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
+import { bookNameFor, isListedBuyer, listedVendors, liveLoginTen, mergeTicketLists, readBookNames, readDirContacts, readLoginTen, rememberLoginTen, restoreLocalAccount, writeDirContacts, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
 import type { Contact, Industry } from "@/lib/vaani/types";
 
 export function CustomerHome() {
@@ -321,18 +321,19 @@ export function CustomerHome() {
           const found = ten.length === 10 ? vendorForPhone(c.phone) : undefined;
           const trade = found?.industry && found.shop && !/^Shop \d{10}$/.test(found.shop) ? found.industry : undefined;
           const v =
-            ten.length === 10 && ten !== meTen
+            found && ten.length === 10 && ten !== meTen
               ? {
-                  id: found?.id || `u-vaani-${ten}`,
-                  name: (found?.shop || found?.name || c.name || "").trim() || `Shop ${ten}`,
-                  shop: (found?.shop || "").trim() || `Shop ${ten}`,
+                  id: found.id || `u-vaani-${ten}`,
+                  name: (found.shop || found.name || c.name || "").trim() || `Shop ${ten}`,
+                  shop: (found.shop || "").trim() || `Shop ${ten}`,
                   phone: formatInPhone(ten),
                   city: "",
-                  industry: trade || found?.industry || "pharmaceutical",
-                  catalog: found?.catalog || [],
+                  industry: trade || found.industry || "pharmaceutical",
+                  catalog: found.catalog || [],
                   altPhones: [ten],
                 }
               : undefined;
+          const buyerOnly = !v && ten.length === 10 && ten !== meTen && isListedBuyer(c.phone);
           return (
             <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
@@ -370,6 +371,8 @@ export function CustomerHome() {
                   <Phone className="size-3.5" />
                   {t("dial")}
                 </Button>
+              ) : buyerOnly ? (
+                <span className="text-xs text-subtle">{t("notAVendor")}</span>
               ) : (
                 <span className="text-xs text-subtle">{t("notOnVaani")}</span>
               )}

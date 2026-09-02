@@ -181,17 +181,20 @@ export const listPublicVendors = createServerFn({ method: "GET" })
       shop_name: string;
       phone: string;
       industry: string;
-    }>(`select user_id, shop_name, phone, industry from vaani_profiles`);
+      is_vendor: boolean | string | number;
+    }>(`select user_id, shop_name, phone, industry, is_vendor from vaani_profiles`);
     return rows
       .map((r) => {
         const fromUser = digits(String(r.user_id || "").replace(/^vaani-/, ""));
         const fromPhone = digits(r.phone || "");
         const ten =
           fromUser.length === 10 ? fromUser : fromPhone.length >= 10 ? fromPhone.slice(-10) : fromPhone;
+        const flag = r.is_vendor === true || r.is_vendor === "t" || r.is_vendor === "true" || r.is_vendor === 1;
         return {
           ten,
           shopName: (r.shop_name || "").trim(),
           industry: (r.industry || "") as Industry | "",
+          isVendor: flag,
         };
       })
       .filter((r) => r.ten.length === 10 && r.shopName);
@@ -205,8 +208,8 @@ export const lookupVendorByPhone = createServerFn({ method: "POST" })
     if (ten.length !== 10) return null;
     const sql = await getSql();
     await ensureVaaniSchema(sql);
-    const rows = await sql.query<{ user_id: string; shop_name: string; phone: string; industry: string }>(
-      `select user_id, shop_name, phone, industry from vaani_profiles`,
+    const rows = await sql.query<{ user_id: string; shop_name: string; phone: string; industry: string; is_vendor: boolean | string | number }>(
+      `select user_id, shop_name, phone, industry, is_vendor from vaani_profiles`,
     );
     const hit = rows.find((r) => {
       const u = digits(String(r.user_id || "").replace(/^vaani-/, ""));
@@ -215,7 +218,9 @@ export const lookupVendorByPhone = createServerFn({ method: "POST" })
     });
     const shopName = (hit?.shop_name || "").trim();
     if (!hit || !shopName) return null;
-    return { ten, shopName, industry: (hit.industry || "") as Industry | "" };
+    const isVendor = hit.is_vendor === true || hit.is_vendor === "t" || hit.is_vendor === "true" || hit.is_vendor === 1;
+    if (!isVendor) return { ten, shopName, industry: (hit.industry || "") as Industry | "", isVendor: false as const };
+    return { ten, shopName, industry: (hit.industry || "") as Industry | "", isVendor: true as const };
   });
 
 export const loadProfile = createServerFn({ method: "GET" })

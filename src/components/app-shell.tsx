@@ -33,6 +33,7 @@ import {
   bookNameFor,
   listedVendors,
   rememberListedVendor,
+  rememberListedBuyer,
   readShopIdentity,
   tenFromEmail,
   useVaani,
@@ -63,6 +64,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   const setAccountReady = useVaani((s) => s.setAccountReady);
   const callVendorId = useVaani((s) => s.callVendorId);
   const setCallVendorId = useVaani((s) => s.setCallVendorId);
+  const selling = Boolean(useVaani((s) => s.isVendor) || readShopIdentity(liveLoginTen() || readLoginTen())?.isVendor);
   const hydrated = useVaani((s) => s.hydrated);
   const accountReady = useVaani((s) => s.accountReady);
   const navigate = useNavigate();
@@ -116,7 +118,8 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
           if (!Array.isArray(rows) || isSignedOut()) return;
           for (const r of rows) {
             if (!r.shopName || r.ten.length !== 10) continue;
-            rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
+            if (r.isVendor) rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
+            else rememberListedBuyer({ shopName: r.shopName, phone: r.ten });
           }
           setLiveVendors(listedVendors());
         })
@@ -181,7 +184,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       if (!ticket || me.length !== 10) return false;
       const buyer = phoneDigits(ticket.customerPhone);
       const vendorTen = phoneDigits(ticket.vendorPhone || "") || String(ticket.vendorId).match(/(\d{10})/)?.[1] || "";
-      if (e.audience === "vendor") return vendorTen === me && buyer !== me;
+      if (e.audience === "vendor") return selling && vendorTen === me && buyer !== me;
       if (e.audience === "customer") return buyer === me && vendorTen !== me;
       return false;
     });
@@ -291,7 +294,12 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
               </Link>
               <Link
                 to="/vendor"
-                onClick={() => {
+                onClick={(e) => {
+                  if (!selling) {
+                    e.preventDefault();
+                    window.alert(t("vendorBlocked"));
+                    return;
+                  }
                   setRole("vendor");
                   setCallVendorId("");
                 }}
@@ -348,13 +356,14 @@ function NoticeBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const me = liveLoginTen() || readLoginTen();
+  const selling = Boolean(useVaani((s) => s.isVendor) || readShopIdentity(me)?.isVendor);
   const visible = notices.filter((n) => {
     if (String(n.ticketId || "").startsWith("reminder:")) return true;
     const ticket = tickets.find((row) => row.id === n.ticketId) || incoming.find((row) => row.id === n.ticketId);
     if (!ticket || me.length !== 10) return false;
     const buyer = phoneDigits(ticket.customerPhone);
     const vendorTen = phoneDigits(ticket.vendorPhone || "") || String(ticket.vendorId).match(/(\d{10})/)?.[1] || "";
-    if (n.audience === "vendor") return vendorTen === me && buyer !== me;
+    if (n.audience === "vendor") return selling && vendorTen === me && buyer !== me;
     if (n.audience === "customer") return buyer === me && vendorTen !== me;
     return false;
   });

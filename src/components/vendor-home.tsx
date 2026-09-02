@@ -31,7 +31,7 @@ export function VendorHome() {
   const shopName = snap?.shopName || "";
   const shopIndustry = snap?.industry || industry;
   const listed = snap?.isVendor ?? isVendor;
-  const inbox = incoming.filter((t) => t.status !== "draft" && !isOwnCustomerOrder(t, ten));
+  const inbox = listed ? incoming.filter((t) => t.status !== "draft" && !isOwnCustomerOrder(t, ten)) : [];
   useEffect(() => {
     applyDirContacts();
   }, []);
@@ -39,7 +39,7 @@ export function VendorHome() {
   const bookRows = directoryRows(ten).slice(0, 40);
 
   useEffect(() => {
-    if (ten.length !== 10) return;
+    if (ten.length !== 10 || !listed) return;
     const local = mergeTicketLists(readVendorInbox(ten), readAccountBackup(ten)?.incoming ?? []);
     if (local.length) useVaani.setState({ incoming: local });
     const vendorId = inboxIdForUser(`vaani-${ten}`);
@@ -73,6 +73,10 @@ export function VendorHome() {
         </div>
         <ShopCard />
       </div>
+
+      {!listed ? (
+        <p className="mb-8 rounded-[var(--radius-xl)] border border-line bg-surface px-4 py-3 text-sm">{t("vendorBlocked")}</p>
+      ) : null}
 
       {bookRows.length > 0 ? (
         <section className="mb-8">

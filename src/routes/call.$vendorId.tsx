@@ -267,7 +267,15 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
     let vendorShop = (listed?.shop || "").trim();
     try {
       const remote = vendorTen.length === 10 ? await lookupVendorByPhone({ data: { phone: vendorTen } }) : null;
-      if (remote?.shopName) {
+      if (remote && remote.isVendor === false) {
+        setError(t("notAVendor"));
+        return;
+      }
+      if (!remote && !listed) {
+        setError(t("vendorNotFound"));
+        return;
+      }
+      if (remote?.shopName && remote.isVendor !== false) {
         vendorShop = remote.shopName;
         rememberListedVendor({ shopName: remote.shopName, phone: vendorTen, industry: remote.industry || listed?.industry || "" });
       }
