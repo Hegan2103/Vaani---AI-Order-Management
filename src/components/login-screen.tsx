@@ -1,6 +1,6 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { storeBearerToken } from "@/lib/auth/client";
+import { signInGoogle, storeBearerToken } from "@/lib/auth/client";
 import {
   liveLoginTen,
   loginPhoneKey,
@@ -481,6 +481,25 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               >
                 {t("sendCode")}
               </button>
+              <div className="mt-6 border-t border-line pt-4">
+                <p className="mb-2 text-xs text-muted">{t("orContinue")}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    setErr(null);
+                    void signInGoogle("/").catch((e: unknown) => {
+                      setBusy(false);
+                      setErr(e instanceof Error ? e.message : "Google sign-in failed");
+                    });
+                  }}
+                >
+                  {t("continueWith", { name: "Google" })}
+                </Button>
+              </div>
             </>
           ) : (
             <>

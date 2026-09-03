@@ -155,3 +155,15 @@ export async function signOut(redirectTo = "/"): Promise<void> {
     },
   });
 }
+
+
+/** Direct Google Cloud OAuth (not the Grok broker). */
+export async function signInGoogle(callbackURL = "/"): Promise<void> {
+  const { data, error } = await authClient.signIn.social({
+    provider: "google",
+    callbackURL,
+    errorCallbackURL: callbackURL,
+  });
+  if (error) throw new Error(error.message ?? "Sign-in failed");
+  if (data?.url) window.location.href = data.url;
+}
