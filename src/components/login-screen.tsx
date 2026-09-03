@@ -1,6 +1,6 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { GROK_PROVIDERS, signIn, storeBearerToken } from "@/lib/auth/client";
+import { storeBearerToken } from "@/lib/auth/client";
 import {
   liveLoginTen,
   loginPhoneKey,
@@ -37,19 +37,13 @@ function persistTyping(ten: string) {
   }
 }
 
-function loadTyping() {
-  if (typed) return toTen(typed);
+export function isSignedOut() {
+  if (signedOutLock) return true;
   try {
-    return toTen(sessionStorage.getItem(TYPING_KEY) || localStorage.getItem(TYPING_KEY) || "");
+    return sessionStorage.getItem("vaani-signed-out") === "1";
   } catch {
-    return "";
+    return false;
   }
-}
-
-function readEntered() {
-  if (typeof window === "undefined") return false;
-  if (stickyEntered) return true;
-  return readLoginTen().length === 10;
 }
 
 function markEntered() {
@@ -72,15 +66,6 @@ function markEntered() {
     /* ignore */
   }
   window.dispatchEvent(new Event("vaani-auth"));
-}
-
-export function isSignedOut() {
-  if (signedOutLock) return true;
-  try {
-    return sessionStorage.getItem("vaani-signed-out") === "1";
-  } catch {
-    return false;
-  }
 }
 
 export function keepSession() {
@@ -128,7 +113,8 @@ export function resetLoginGate() {
     });
   } catch {
     /* ignore */
-  }  try {
+  }
+  try {
     document.cookie = `${ENTERED_KEY}=; path=/; max-age=0`;
     document.cookie = "vaani_phone=; path=/; max-age=0";
   } catch {
@@ -279,7 +265,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     setPhone(ten);
     setErr(null);
     const node = document.getElementById("vaani-phone-count");
-    if (node) node.textContent = ten.length === 10 ? `${ten.length}/10` : `${ten.length}/10`;
+    if (node) node.textContent = `${ten.length}/10`;
   }
 
   function wakePhoneBox() {
@@ -383,7 +369,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
     setErr(null);
   }
 
- function finish(ten: string) {
+  function finish(ten: string) {
     rememberLoginTen(ten);
     stickyEntered = true;
     const formatted = `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`;
@@ -454,12 +440,12 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
             </select>
           </div>
           <p className="font-display text-3xl tracking-tight">Vaani</p>
-          <h1 className="mt-1 text-lg font-medium">{t("signIn")}</h1>
+          <h1 className="mt-1 text-lg font-medium">Sign in</h1>
 
           {step === "phone" ? (
             <>
-              <p className="mt-3 text-sm text-muted">{t("enterMobile")}</p>
-              <p className="mt-5 text-xs text-muted">{t("mobile")}</p>
+              <p className="mt-3 text-sm text-muted">Enter your 10-digit mobile number.</p>
+              <p className="mt-5 text-xs text-muted">Mobile</p>
               <div className="mt-1 flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-white px-3 py-3">
                 <span className="text-sm text-muted">+91</span>
                 <input
@@ -480,22 +466,19 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 />
               </div>
               <p id="vaani-phone-count" className={`mt-2 text-sm ${phone.length === 10 ? "font-medium text-ink" : "text-muted"}`}>
-                {phone.length === 10 ? t("digitsReady", { n: phone.length }) : t("digitsCount", { n: phone.length })}
+                {phone.length}/10
               </p>
-             <button
-  type="button"
-  className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
-  onClick={() => {
-    const ten = livePhone();
-    if (ten.length === 10) {
-      requestCode();
-    } else {
-      setErr(t("tapTen"));
-    }
-  }}
->
-  {t("sendCode")}
-</button>
+              <button
+                type="button"
+                className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] bg-accent text-base font-medium text-accent-fg"
+                onClick={() => {
+                  const ten = livePhone();
+                  if (ten.length === 10) requestCode();
+                  else setErr(t("tapTen"));
+                }}
+              >
+                Send code
+              </button>
             </>
           ) : (
             <>
@@ -530,13 +513,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 {t("verifySignIn")}
               </button>
               <div className="mt-3 flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1"
-                  disabled={busy}
-                  onClick={() => void requestCode()}
-                >
+                <Button type="button" variant="outline" className="flex-1" disabled={busy} onClick={() => void requestCode()}>
                   {t("resendCode")}
                 </Button>
                 <Button
@@ -557,25 +534,6 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
             </>
           )}
           {err ? <p className="mt-3 text-sm text-danger">{err}</p> : null}
-
-          {step === "phone" ? (
-            <div className="mt-6 border-t border-line pt-4">
-              <p className="mb-2 text-xs text-muted">{t("orContinue")}</p>
-              <div className="space-y-2">
-                {GROK_PROVIDERS.filter((p) => p.idp !== "twitter" && p.providerId !== "grok-x").map((p) => (
-                  <Button
-                    key={p.providerId}
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => void signIn(p.providerId, { callbackURL: "/" })}
-                  >
-                    {t("continueWith", { name: p.label })}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
     </main>
