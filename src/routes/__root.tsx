@@ -2,6 +2,7 @@ import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-r
 import { AuthProvider } from "@/lib/auth/provider";
 import { AppShell } from "@/components/app-shell";
 import { LoginGate } from "@/components/login-screen";
+import { PhoneOnlyGate } from "@/components/phone-only-gate";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
@@ -74,11 +75,13 @@ function RootComponent() {
         <script dangerouslySetInnerHTML={{ __html: CRED_SCRIPT }} />
         <PreviewHostBridge />
         <AuthProvider>
+          <PhoneOnlyGate>
           <LoginGate startOn={Boolean(ctx?.entered)}>
             <AppShell seedPhone={ctx?.phone}>
               <Outlet />
             </AppShell>
           </LoginGate>
+          </PhoneOnlyGate>
         </AuthProvider>
         <Scripts />
       </body>
