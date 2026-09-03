@@ -447,9 +447,16 @@ export function injectGrokPwaHead(html, ctx = {}) {
     grokOgHeadTags({ host, appName, site, documentTitle, cwd }).join(""),
   );
 
-  if (!next.includes("/grok-app-builder/extensions.js")) {
+  const skipGrokAuthOverlay = isVercelSystemHost(
+    String(host ?? "")
+      .split(",")[0]
+      .trim()
+      .split(":")[0]
+      .toLowerCase(),
+  );
+  if (!skipGrokAuthOverlay && !next.includes("/grok-app-builder/extensions.js")) {
     missing.push(...grokExtensionsHeadTags(projectId));
-  } else if (projectId && !next.includes('name="grok-project-id"')) {
+  } else if (!skipGrokAuthOverlay && projectId && !next.includes('name="grok-project-id"')) {
     missing.push(`<meta name="grok-project-id" content="${escapeHtml(projectId)}">`);
   }
   if (
