@@ -126,9 +126,17 @@ function TicketPage() {
   const listedExact = listedVendors().find((v) => phoneDigits(v.phone) === vendorTen);
   const listedShop = (listedExact?.shop || vendor?.shop || "").trim();
   const stampedShop = (ticket.vendorShop || "").trim();
+  const pinShop = shopNameForTen(vendorTen, "");
   const clean = (name: string) => (name && name !== mine && !/^Shop \d{10}$/.test(name) ? name : "");
   const customerVendorTitle =
-    clean(remoteShop) || clean(listedShop) || clean(stampedShop) || remoteShop || t("vendor");
+    clean(remoteShop) ||
+    clean(listedShop) ||
+    clean(stampedShop) ||
+    clean(pinShop) ||
+    (stampedShop && stampedShop !== mine ? stampedShop : "") ||
+    (listedShop && listedShop !== mine ? listedShop : "") ||
+    (pinShop && pinShop !== mine ? pinShop : "") ||
+    t("vendor");
   const pending = ticket.lines.some((l) => l.status === "pending");
   const waitingOnPrice = ticket.lines.some((l) => l.status === "quoted");
   const vendorReady =
