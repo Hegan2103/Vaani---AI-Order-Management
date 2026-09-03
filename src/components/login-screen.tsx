@@ -429,8 +429,10 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 const next = e.target.value;
                 setLanguage(next);
                 writeUiLanguage(next);
+                document.documentElement.lang = next;
+                document.documentElement.dir = next.startsWith("ur") ? "rtl" : "ltr";
               }}
-              className="h-9 rounded-[var(--radius-sm)] border border-line bg-bg px-2 text-xs"
+              className="relative z-20 h-11 min-w-[8rem] rounded-[var(--radius-sm)] border border-line bg-bg px-2 text-sm"
             >
               {LANGUAGES.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -440,12 +442,12 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
             </select>
           </div>
           <p className="font-display text-3xl tracking-tight">Vaani</p>
-          <h1 className="mt-1 text-lg font-medium">Sign in</h1>
+          <h1 className="mt-1 text-lg font-medium">{t("signIn")}</h1>
 
           {step === "phone" ? (
             <>
-              <p className="mt-3 text-sm text-muted">Enter your 10-digit mobile number.</p>
-              <p className="mt-5 text-xs text-muted">Mobile</p>
+              <p className="mt-3 text-sm text-muted">{t("enterMobile")}</p>
+              <p className="mt-5 text-xs text-muted">{t("mobile")}</p>
               <div className="mt-1 flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-white px-3 py-3">
                 <span className="text-sm text-muted">+91</span>
                 <input
@@ -477,17 +479,25 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                   else setErr(t("tapTen"));
                 }}
               >
-                Send code
+                {t("sendCode")}
               </button>
               <div className="mt-6 border-t border-line pt-4">
-                <p className="mb-2 text-xs text-muted">Or continue with</p>
+                <p className="mb-2 text-xs text-muted">{t("orContinue")}</p>
                 <Button
                   type="button"
                   variant="outline"
                   className="w-full"
-                  onClick={() => void signIn("grok-google", { callbackURL: "/" })}
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    setErr(null);
+                    void signIn("grok-google", { callbackURL: "/" }).catch((e: unknown) => {
+                      setBusy(false);
+                      setErr(e instanceof Error ? e.message : t("signIn"));
+                    });
+                  }}
                 >
-                  Continue with Google
+                  {t("continueWith", { name: "Google" })}
                 </Button>
               </div>
             </>
