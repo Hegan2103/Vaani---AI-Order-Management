@@ -159,11 +159,40 @@ export async function signOut(redirectTo = "/"): Promise<void> {
 
 /** Direct Google Cloud OAuth (not the Grok broker). */
 export async function signInGoogle(callbackURL = "/"): Promise<void> {
-  const { data, error } = await authClient.signIn.social({
-    provider: "google",
-    callbackURL,
-    errorCallbackURL: callbackURL,
-  });
-  if (error) throw new Error(error.message ?? "Sign-in failed");
-  if (data?.url) window.location.href = data.url;
+  try {
+    const { data, error } = await authClient.signIn.social({
+      provider: "google",
+      callbackURL,
+      errorCallbackURL: callbackURL,
+    });
+    if (!error && data?.url) {
+      window.location.assign(data.url);
+      return;
+    }
+    if (!error && !data?.url) return;
+    const detail =
+      (error && ("message" in error ? String(error.message) : "")) ||
+      (error ? JSON.stringify(error) : "Sign-in failed");
+    throw new Error(detail);
+  } catch (first) {
+    const next = new URL("/api/auth/sign-in/social", window.location.origin);
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = next.toString();
+    form.style.display = "none";
+    const payload = {
+      provider: "google",
+      callbackURL,
+      errorCallbackURL: callbackURL,
+    };
+    for (const [k, v] of Object.entries(payload)) {
+      const input = document.createElement("input");
+      input.name = k;
+      input.value = v;
+      form.appendChild(input);
+    }
+    document.body.appendChild(form);
+    form.submit();
+    throw first instanceof Error ? first : new Error("Sign-in failed");
+  }
 }
