@@ -1,1 +1,0 @@
-import{o as e}from"./preload-helper-mWXRwkvs.js";import{d as t,f as n}from"./login-screen-CIL5Q0Sf.js";var r=n({method:`POST`}).middleware([t]).handler(e(`9fb45d9282a026962d36dbf0e7433bfe7e7c10d28f1ca9e65a75a7c3fe1a3d9b`)),i=n({method:`POST`}).middleware([t]).handler(e(`00ed397e18128a291a03f51bf39ac47c48c271e9318f5e375dac0072537d2b90`));export{r as n,i as t};
