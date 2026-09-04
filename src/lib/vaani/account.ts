@@ -66,6 +66,7 @@ async function ensureVaaniSchema(sql: Sql) {
       payload jsonb not null
     )
   `);
+  await sql.query(`alter table vaani_reminders add column if not exists notify_both boolean not null default false`);
 }
 
 async function createPhoneSession(ten: string) {
@@ -856,10 +857,11 @@ export const saveReminder = createServerFn({ method: "POST" })
     const r = data.reminder;
     const sql = await getSql();
     await ensureVaaniSchema(sql);
+    const both = Boolean(r.notifyBoth);
     await sql.query(
-      `insert into vaani_reminders (id, owner_ten, contact_ten, payload) values ($1, $2, $3, $4::jsonb)
-       on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload`,
-      [r.id, digits(r.ownerTen), digits(r.contactTen), JSON.stringify(r)],
+      `insert into vaani_reminders (id, owner_ten, contact_ten, payload, notify_both) values ($1, $2, $3, $4::jsonb, $5)
+       on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload, notify_both = excluded.notify_both`,
+      [r.id, digits(r.ownerTen), digits(r.contactTen), JSON.stringify({ ...r, notifyBoth: both }), both],
     );
     return { ok: true as const };
   });
@@ -882,11 +884,37 @@ export const listRemindersRemote = createServerFn({ method: "POST" })
     if (ten.length !== 10) return [];
     const sql = await getSql();
     await ensureVaaniSchema(sql);
-    const rows = await sql.query<{ payload: unknown }>(
-      `select payload from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
+    const rows = await sql.query<{
+      payload: unknown;
+      owner_ten: string;
+      contact_ten: string;
+      notify_both?: boolean | string | number;
+    }>(
+      `select payload, owner_ten, contact_ten, notify_both from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
       [ten],
     );
-    return rows.map((row) => (typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload));
+    return rows.map((row) => {
+      let raw: Record<string, unknown> = {};
+      try {
+        const p = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+        if (p && typeof p === "object") raw = p as Record<string, unknown>;
+      } catch {
+        raw = {};
+      }
+      const both =
+        raw.notifyBoth === true ||
+        row.notify_both === true ||
+        row.notify_both === "t" ||
+        row.notify_both === "true" ||
+        row.notify_both === 1;
+      return {
+        ...raw,
+        ownerTen: digits(String(raw.ownerTen || row.owner_ten || "")),
+        contactTen: digits(String(raw.contactTen || row.contact_ten || "")),
+        notifyBoth: both,
+        bells: (raw.bells && typeof raw.bells === "object" ? raw.bells : {}) as Record<string, string>,
+      };
+    });
   });
 
 export const fireReminderPush = createServerFn({ method: "POST" })
