@@ -67,6 +67,17 @@ async function ensureVaaniSchema(sql: Sql) {
     )
   `);
   await sql.query(`alter table vaani_reminders add column if not exists notify_both boolean not null default false`);
+  await sql.query(`
+    create table if not exists vaani_inbox (
+      id text primary key,
+      phone text not null,
+      title text not null default '',
+      body text not null default '',
+      ticket_id text not null default '',
+      created_at timestamptz not null default now()
+    )
+  `);
+  await sql.query(`create index if not exists vaani_inbox_phone_idx on vaani_inbox (phone)`);
 }
 
 async function createPhoneSession(ten: string) {
@@ -872,6 +883,19 @@ export const saveReminder = createServerFn({ method: "POST" })
         [r.id, digits(r.ownerTen), digits(r.contactTen), payload],
       );
     }
+    if (both) {
+      const contact = digits(r.contactTen);
+      if (contact.length === 10 && contact !== digits(r.ownerTen)) {
+        const nid = `rem-${r.id}-${contact}`;
+        const title = (r.contactName || "Reminder").toString();
+        const body = (r.message || title).toString();
+        await sql.query(
+          `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)
+           on conflict (id) do update set title = excluded.title, body = excluded.body`,
+          [nid, contact, title, body, `reminder:${r.id}`],
+        );
+      }
+    }
     return { ok: true as const };
   });
 
@@ -932,6 +956,34 @@ export const listRemindersRemote = createServerFn({ method: "POST" })
         bells: (raw.bells && typeof raw.bells === "object" ? raw.bells : {}) as Record<string, string>,
       };
     });
+  });
+
+
+export const listInboxNotices = createServerFn({ method: "POST" })
+  .middleware([vaaniGate])
+  .validator((input: { phone: string }) => input)
+  .handler(async ({ data }) => {
+    const ten = digits(data.phone);
+    if (ten.length !== 10) return [];
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql.query<{
+      id: string;
+      title: string;
+      body: string;
+      ticket_id: string;
+      created_at: string;
+    }>(
+      `select id, title, body, ticket_id, created_at from vaani_inbox where phone = $1 order by created_at desc limit 40`,
+      [ten],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      ticketId: row.ticket_id || `reminder:${row.id}`,
+      at: row.created_at,
+    }));
   });
 
 export const fireReminderPush = createServerFn({ method: "POST" })

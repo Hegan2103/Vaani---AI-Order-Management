@@ -6,7 +6,7 @@ import { resetLoginGate, isSignedOut } from "@/components/login-screen";
 import { VendorHome } from "@/components/vendor-home";
 import { CallScreen } from "@/routes/call.$vendorId";
 import { Button } from "@/components/ui/button";
-import { fireReminderPush, listPublicVendors, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
+import { fireReminderPush, listInboxNotices, listPublicVendors, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
 import { cn } from "@/lib/cn";
 import { unlockBeep, playBeep, diffTicketEvents } from "@/lib/vaani/notify";
 import { enablePush, showLocalPopup } from "@/lib/vaani/push-client";
@@ -222,6 +222,33 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             ? ((remoteRaw as { result: Reminder[] }).result)
             : [];
         if (remote.length) mergeReminders(remote as Reminder[]);
+        const inbox = await listInboxNotices({ data: { phone: login } });
+        if (stop || isSignedOut()) return;
+        const inboxRows = Array.isArray(inbox) ? inbox : [];
+        const fresh = inboxRows.filter((n) => {
+          const key = `vaani-inbox-seen:${n.id}`;
+          try {
+            if (sessionStorage.getItem(key) === "1") return false;
+            sessionStorage.setItem(key, "1");
+          } catch {
+            return true;
+          }
+          return true;
+        });
+        if (fresh.length) {
+          pushNotices(
+            fresh.map((n) => ({
+              id: n.id,
+              at: n.at || new Date().toISOString(),
+              title: n.title || "Reminder",
+              body: n.body || n.title || "Reminder",
+              ticketId: n.ticketId || `reminder:${n.id}`,
+              read: false,
+              audience: "customer" as const,
+            })),
+          );
+          playBeep();
+        }
       } catch {
         /* local reminders */
       }
