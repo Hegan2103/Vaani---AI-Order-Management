@@ -138,7 +138,7 @@ function ReminderForm({
   async function save() {
     const next = {
       ...row,
-      id: existing?.id || row.id || crypto.randomUUID(),
+      id: crypto.randomUUID(),
       notifyBoth,
       contactName,
       ownerTen,
@@ -147,6 +147,12 @@ function ReminderForm({
       lastFired: "",
       bells: {},
     };
+    for (const old of listReminders().filter(
+      (r) => r.id !== next.id && phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen,
+    )) {
+      deleteReminder(old.id);
+      void deleteReminderRemote({ data: { id: old.id } }).catch(() => undefined);
+    }
     upsertReminder(next);
     try {
       localStorage.setItem(formKey(), JSON.stringify(next));

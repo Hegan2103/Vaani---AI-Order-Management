@@ -240,7 +240,13 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       }
       const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
       const today = new Date().toLocaleString("en-CA", { timeZone: "Asia/Kolkata" }).slice(0, 10);
+      const latestByPair = new Map<string, Reminder>();
       for (const r of listReminders()) {
+        const key = `${phoneDigits(r.ownerTen)}:${phoneDigits(r.contactTen)}`;
+        const prev = latestByPair.get(key);
+        if (!prev || String(r.createdAt || "") > String(prev.createdAt || "")) latestByPair.set(key, r);
+      }
+      for (const r of latestByPair.values()) {
         const targets = reminderTargets(r);
         if (!targets.includes(login)) continue;
         const dueNow = isReminderDue(r);
@@ -269,6 +275,12 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
           }
         }
         const nid = `bell-${r.id}-${login}-${today}`;
+        const pairIds = listReminders()
+          .filter((row) => phoneDigits(row.ownerTen) === phoneDigits(r.ownerTen) && phoneDigits(row.contactTen) === phoneDigits(r.contactTen))
+          .map((row) => `reminder:${row.id}`);
+        useVaani.setState((s) => ({
+          notices: s.notices.filter((n) => !pairIds.includes(String(n.ticketId)) || n.id === nid),
+        }));
         if (useVaani.getState().notices.some((n) => n.id === nid)) continue;
         const owner = phoneDigits(r.ownerTen);
         const contact = phoneDigits(r.contactTen);

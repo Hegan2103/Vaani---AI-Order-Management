@@ -72,7 +72,10 @@ function parseTime(hhmm: string) {
 export function isReminderDue(row: Reminder, now = new Date()): boolean {
   const today = todayStamp(now);
   if (row.lastFired === today) return false;
-  if (minutesNow(now) < parseTime(row.time)) return false;
+  const mins = minutesNow(now);
+  const at = parseTime(row.time);
+  if (mins < at) return false;
+  if (mins > at + 5) return false;
   if (row.repeat === "daily") return true;
   if (row.repeat === "weekly") return now.getDay() === (row.weekday ?? 1);
   if (row.repeat === "once") return (row.date || "") === today;

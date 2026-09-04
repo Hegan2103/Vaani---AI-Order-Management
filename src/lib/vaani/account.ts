@@ -999,7 +999,9 @@ function reminderIsDue(row: { lastFired?: string; time?: string; repeat?: string
   const now = kolkataNow();
   if ((row.lastFired || "") === now.stamp) return false;
   const [h, m] = String(row.time || "09:00").split(":").map((n) => Number(n));
-  if (now.minutes < (h || 0) * 60 + (m || 0)) return false;
+  const atMin = (h || 0) * 60 + (m || 0);
+  if (now.minutes < atMin) return false;
+  if (now.minutes > atMin + 5) return false;
   if (row.repeat === "weekly") return now.day === (row.weekday ?? 1);
   if (row.repeat === "once") return (row.date || "") === now.stamp;
   if (row.repeat === "range") return now.stamp >= (row.from || now.stamp) && now.stamp <= (row.to || now.stamp);
