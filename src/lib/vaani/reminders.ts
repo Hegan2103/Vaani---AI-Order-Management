@@ -53,15 +53,29 @@ export function mergeReminders(extra: Reminder[]) {
   saveAll([...map.values()]);
 }
 
+function kolkataParts(d = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || "";
+  return {
+    stamp: `${get("year")}-${get("month")}-${get("day")}`,
+    minutes: Number(get("hour")) * 60 + Number(get("minute")),
+  };
+}
+
 function todayStamp(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return kolkataParts(d).stamp;
 }
 
 function minutesNow(d = new Date()) {
-  return d.getHours() * 60 + d.getMinutes();
+  return kolkataParts(d).minutes;
 }
 
 function parseTime(hhmm: string) {
@@ -74,8 +88,7 @@ export function isReminderDue(row: Reminder, now = new Date()): boolean {
   if (row.lastFired === today) return false;
   const mins = minutesNow(now);
   const at = parseTime(row.time);
-  if (mins < at) return false;
-  if (mins > at + 5) return false;
+  if (mins < at || mins > at + 1) return false;
   if (row.repeat === "daily") return true;
   if (row.repeat === "weekly") return now.getDay() === (row.weekday ?? 1);
   if (row.repeat === "once") return (row.date || "") === today;

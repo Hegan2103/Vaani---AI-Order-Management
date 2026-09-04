@@ -871,11 +871,18 @@ export const saveReminder = createServerFn({ method: "POST" })
     await ensureVaaniSchema(sql);
     const both = Boolean(r.notifyBoth);
     const payload = JSON.stringify({ ...r, notifyBoth: both });
+    const owner = digits(r.ownerTen);
+    const contact = digits(r.contactTen);
+    try {
+      await sql.query(`delete from vaani_reminders where owner_ten = $1 and contact_ten = $2 and id <> $3`, [owner, contact, r.id]);
+    } catch {
+      /* keep going */
+    }
     try {
       await sql.query(
         `insert into vaani_reminders (id, owner_ten, contact_ten, payload, notify_both, fired_stamp) values ($1, $2, $3, $4::jsonb, $5, '')
          on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload, notify_both = excluded.notify_both, fired_stamp = ''`,
-        [r.id, digits(r.ownerTen), digits(r.contactTen), payload, both],
+        [r.id, owner, contact, payload, both],
       );
     } catch {
       await sql.query(
@@ -1001,7 +1008,7 @@ function reminderIsDue(row: { lastFired?: string; time?: string; repeat?: string
   const [h, m] = String(row.time || "09:00").split(":").map((n) => Number(n));
   const atMin = (h || 0) * 60 + (m || 0);
   if (now.minutes < atMin) return false;
-  if (now.minutes > atMin + 5) return false;
+  if (now.minutes > atMin + 1) return false;
   if (row.repeat === "weekly") return now.day === (row.weekday ?? 1);
   if (row.repeat === "once") return (row.date || "") === now.stamp;
   if (row.repeat === "range") return now.stamp >= (row.from || now.stamp) && now.stamp <= (row.to || now.stamp);
@@ -1025,7 +1032,22 @@ export const processDueReminders = createServerFn({ method: "POST" })
     let fired = 0;
     const notices: { id: string; title: string; body: string; ticketId: string }[] = [];
     const stamp = kolkataNow().stamp;
+    const latest = new Map<string, { created: string; id: string }>();
     for (const row of rows) {
+      let created = "";
+      try {
+        const p = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+        created = String((p as { createdAt?: string })?.createdAt || "");
+      } catch {
+        created = "";
+      }
+      const key = `${digits(row.owner_ten)}:${digits(row.contact_ten)}`;
+      const prev = latest.get(key);
+      if (!prev || created > prev.created) latest.set(key, { created, id: row.id });
+    }
+    for (const row of rows) {
+      const key = `${digits(row.owner_ten)}:${digits(row.contact_ten)}`;
+      if (latest.get(key)?.id !== row.id) continue;
       let raw: Record<string, unknown> = {};
       try {
         const p = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
