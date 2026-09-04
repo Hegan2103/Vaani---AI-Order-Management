@@ -227,41 +227,65 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       }
       try {
         const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-        const dueRaw = await processDueReminders({ data: { phone: login } });
-        const dueRes =
-          dueRaw && typeof dueRaw === "object" && "notices" in (dueRaw as object)
-            ? (dueRaw as { notices?: { id: string; title: string; body: string; ticketId: string }[] })
-            : dueRaw && typeof dueRaw === "object" && Array.isArray((dueRaw as { result?: { notices?: unknown } }).result?.notices)
-              ? (dueRaw as { result: { notices: { id: string; title: string; body: string; ticketId: string }[] } }).result
-              : { notices: [] as { id: string; title: string; body: string; ticketId: string }[] };
-        const inboxRaw = await listInboxNotices({ data: { phone: login } });
-        const inbox = Array.isArray(inboxRaw)
-          ? inboxRaw
-          : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
-            ? ((inboxRaw as { result: typeof dueRes.notices }).result)
+        await processDueReminders({ data: { phone: login } });
+        const again = await listRemindersRemote({ data: { phone: login } });
+        const againRows = Array.isArray(again)
+          ? again
+          : again && typeof again === "object" && Array.isArray((again as { result?: unknown }).result)
+            ? ((again as { result: Reminder[] }).result)
             : [];
-        const rows = [
-          ...(Array.isArray(dueRes.notices) ? dueRes.notices.map((n) => ({ ...n, at: new Date().toISOString() })) : []),
-          ...inbox.map((n) => ({ ...n, at: n.at || new Date().toISOString() })),
-        ];
-        const have = new Set(useVaani.getState().notices.map((n) => n.id));
-        const fresh = rows.filter((n) => n.id && !have.has(n.id));
-        if (fresh.length) {
-          pushNotices(
-            fresh.map((n) => ({
-              id: n.id,
-              at: n.at || new Date().toISOString(),
-              title: n.title || "Reminder",
-              body: n.body || n.title || "Reminder",
-              ticketId: String(n.ticketId || "").startsWith("reminder") ? n.ticketId : `reminder:${n.id}`,
-              read: false,
-              audience: useVaani.getState().role,
-            })),
-          );
-          playBeep();
-        }
+        if (againRows.length) mergeReminders(againRows as Reminder[]);
       } catch {
         /* server due optional */
+      }
+      const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
+      const today = new Date().toLocaleString("en-CA", { timeZone: "Asia/Kolkata" }).slice(0, 10);
+      for (const r of listReminders()) {
+        const targets = reminderTargets(r);
+        if (!targets.includes(login)) continue;
+        const dueNow = isReminderDue(r);
+        const firedToday = (r.lastFired || "") === today;
+        if (!dueNow && !firedToday) continue;
+        if (dueNow && phoneDigits(r.ownerTen) === login) {
+          const lock = `vaani-fired:${r.id}:${today}`;
+          let first = true;
+          try {
+            first = localStorage.getItem(lock) !== "1";
+            if (first) localStorage.setItem(lock, "1");
+          } catch {
+            first = true;
+          }
+          if (first) {
+            const next = { ...r, lastFired: today };
+            upsertReminder(next);
+            void saveReminder({ data: { reminder: next } }).catch(() => undefined);
+            void fireReminderPush({
+              data: {
+                phones: targets,
+                title: r.contactName || "Reminder",
+                body: r.message || r.contactName || "Reminder",
+              },
+            }).catch(() => undefined);
+          }
+        }
+        const nid = `bell-${r.id}-${login}-${today}`;
+        if (useVaani.getState().notices.some((n) => n.id === nid)) continue;
+        const owner = phoneDigits(r.ownerTen);
+        const contact = phoneDigits(r.contactTen);
+        const other = login === owner ? contact : owner;
+        const label = bookNameFor(other, r.contactName) || r.contactName || "Reminder";
+        pushNotices([
+          {
+            id: nid,
+            at: new Date().toISOString(),
+            title: label,
+            body: r.message || label,
+            ticketId: `reminder:${r.id}`,
+            read: false,
+            audience: useVaani.getState().role,
+          },
+        ]);
+        playBeep();
       }
     }
     void tick();
