@@ -247,39 +247,6 @@ export function readLoginTen() {
   } catch {
     /* ignore */
   }
-  try {
-    const raw = localStorage.getItem(SHOP_KEY) || sessionStorage.getItem(SHOP_KEY) || "";
-    const t = tryTen(JSON.parse(raw || "{}").phone || "");
-    if (t) return t;
-  } catch {
-    /* ignore */
-  }
-  try {
-    const store = JSON.parse(localStorage.getItem("vaani-store-v3") || "{}") as { state?: { customerPhone?: string } };
-    const t = tryTen(store?.state?.customerPhone || "");
-    if (t) return t;
-  } catch {
-    /* ignore */
-  }
-  try {
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i) || "";
-      if (!key.startsWith(`${SHOP_KEY}:`)) continue;
-      const t = tryTen(key.slice(SHOP_KEY.length + 1));
-      if (t) return t;
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    const known = JSON.parse(localStorage.getItem("vaani-known-phones") || "[]") as string[];
-    for (let i = known.length - 1; i >= 0; i -= 1) {
-      const t = tryTen(known[i]);
-      if (t) return t;
-    }
-  } catch {
-    /* ignore */
-  }
   return "";
 }
 

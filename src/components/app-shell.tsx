@@ -545,6 +545,7 @@ function AccountBar() {
       /* ignore */
     }
     storeBearerToken(null);
+    window.location.replace("/");
   }
   return (
     <div className="flex items-center gap-2">
