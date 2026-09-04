@@ -61,7 +61,9 @@ function ReminderForm({
   const { t } = useT();
   const ownerTen = liveLoginTen() || readLoginTen();
   const contactTen = phoneDigits(contactPhone);
-  const existing = listReminders().find((r) => r.ownerTen === ownerTen && r.contactTen === contactTen);
+  const existing = listReminders()
+    .filter((r) => r.ownerTen === ownerTen && r.contactTen === contactTen)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
   const [row, setRow] = useState<Reminder>(
     existing || blankReminder(ownerTen, contactTen, contactName, notifyBoth),
   );
@@ -74,11 +76,12 @@ function ReminderForm({
   async function save() {
     const next = {
       ...row,
-      id: crypto.randomUUID(),
+      id: existing?.id || row.id || crypto.randomUUID(),
       notifyBoth,
       contactName,
       ownerTen,
       contactTen,
+      createdAt: existing?.createdAt || row.createdAt || new Date().toISOString(),
       lastFired: "",
       bells: {},
     };
@@ -197,7 +200,7 @@ function ReminderForm({
         {msg ? <p className="mt-2 text-sm text-ok">{msg}</p> : null}
         <div className="mt-4 flex gap-2">
           <Button type="button" className="flex-1" onClick={() => void save()}>
-            {t("saveShop")}
+            {t("reminderSave")}
           </Button>
           <Button type="button" variant="outline" onClick={onClose}>
             {t("cancel")}
