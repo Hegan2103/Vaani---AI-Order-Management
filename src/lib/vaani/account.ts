@@ -1060,10 +1060,24 @@ export const processDueReminders = createServerFn({ method: "POST" })
       const contactPhone = reminder.contactTen;
       const body = reminder.message || reminder.contactName || "Reminder";
       const ownerTitle = reminder.contactName || "Reminder";
-      await sendPushToPhones([ownerPhone].filter((p) => p.length === 10), ownerTitle, body, "/");
+      let contactTitle = ownerTitle;
+      try {
+        const shops = await sql.query<{ shop_name: string }>(
+          `select shop_name from vaani_profiles where phone = $1 or right(regexp_replace(coalesce(phone,''), '[^0-9]', '', 'g'), 10) = $1 limit 1`,
+          [ownerPhone],
+        );
+        const shop = (Array.isArray(shops) ? shops : []).find((s) => (s.shop_name || "").trim());
+        if (shop?.shop_name?.trim()) contactTitle = shop.shop_name.trim();
+      } catch {
+        /* keep owner title */
+      }
       const phones = reminder.notifyBoth
         ? [ownerPhone, contactPhone].filter((p) => p.length === 10)
         : [ownerPhone].filter((p) => p.length === 10);
+      await sendPushToPhones([ownerPhone].filter((p) => p.length === 10), ownerTitle, body, "/");
+      if (reminder.notifyBoth && contactPhone.length === 10) {
+        await sendPushToPhones([contactPhone], contactTitle, body, "/");
+      }
       for (const phone of phones) {
         const title = phone === ownerPhone ? ownerTitle : ownerTitle;
         const nid = `due-${row.id}-${phone}-${stamp}`;
