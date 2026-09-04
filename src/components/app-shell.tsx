@@ -31,6 +31,7 @@ import {
   restoreLocalAccount,
   applyDirContacts,
   bookNameFor,
+  directoryRows,
   listedVendors,
   vendorFromListing,
   rememberListedVendor,
@@ -274,7 +275,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             }).catch(() => undefined);
           }
         }
-        if (dueNow && phoneDigits(r.contactTen) === login && phoneDigits(r.ownerTen) !== login) {
+        if ((dueNow || firedToday) && phoneDigits(r.contactTen) === login && phoneDigits(r.ownerTen) !== login) {
           const rlock = `vaani-recv-push:${r.id}:${today}`;
           let rfirst = true;
           try {
@@ -284,7 +285,9 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             rfirst = true;
           }
           if (rfirst) {
-            const fromName = bookNameFor(phoneDigits(r.ownerTen), "") || "Reminder";
+            const ownerTen = phoneDigits(r.ownerTen);
+            const dirHit = directoryRows(login).find((c) => phoneDigits(c.phone) === ownerTen);
+            const fromName = bookNameFor(ownerTen, "") || (dirHit?.name || "").trim() || "Reminder";
             void fireReminderPush({
               data: {
                 phones: [login],
@@ -292,6 +295,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
                 body: r.message || fromName,
               },
             }).catch(() => undefined);
+            void showLocalPopup(fromName, r.message || fromName);
           }
         }
         const nid = `bell-${r.id}-${login}-${today}`;
