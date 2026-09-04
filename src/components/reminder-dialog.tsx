@@ -63,7 +63,7 @@ function ReminderForm({
   const ownerTen = liveLoginTen() || readLoginTen();
   const contactTen = phoneDigits(contactPhone);
   function formKey() {
-    return `vaani-reminder-form:${ownerTen}:${contactTen}`;
+    return `vaani-reminder-form:${phoneDigits(ownerTen)}:${phoneDigits(contactTen)}`;
   }
   function readFormCache(): Reminder | undefined {
     if (typeof window === "undefined" || ownerTen.length !== 10 || contactTen.length !== 10) return undefined;
@@ -97,7 +97,21 @@ function ReminderForm({
         if (stop) return;
         const rows = Array.isArray(remote) ? remote : [];
         if (rows.length) mergeReminders(rows as Reminder[]);
-        const hit = readFormCache() || latestForPair();
+        const cached = readFormCache();
+        if (cached && (cached.time || cached.message)) {
+          setRow({
+            ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
+            ...cached,
+            notifyBoth,
+            contactName,
+            ownerTen,
+            contactTen,
+            time: String(cached.time || "09:00").slice(0, 5),
+            message: String(cached.message || ""),
+          });
+          return;
+        }
+        const hit = latestForPair();
         if (hit) {
           setRow({
             ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
@@ -129,7 +143,7 @@ function ReminderForm({
       contactName,
       ownerTen,
       contactTen,
-      createdAt: existing?.createdAt || row.createdAt || new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       lastFired: "",
       bells: {},
     };
