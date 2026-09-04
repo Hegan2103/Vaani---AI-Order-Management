@@ -873,8 +873,8 @@ export const saveReminder = createServerFn({ method: "POST" })
     const payload = JSON.stringify({ ...r, notifyBoth: both });
     try {
       await sql.query(
-        `insert into vaani_reminders (id, owner_ten, contact_ten, payload, notify_both) values ($1, $2, $3, $4::jsonb, $5)
-         on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload, notify_both = excluded.notify_both`,
+        `insert into vaani_reminders (id, owner_ten, contact_ten, payload, notify_both, fired_stamp) values ($1, $2, $3, $4::jsonb, $5, '')
+         on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload, notify_both = excluded.notify_both, fired_stamp = ''`,
         [r.id, digits(r.ownerTen), digits(r.contactTen), payload, both],
       );
     } catch {
