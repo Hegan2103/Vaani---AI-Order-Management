@@ -858,11 +858,20 @@ export const saveReminder = createServerFn({ method: "POST" })
     const sql = await getSql();
     await ensureVaaniSchema(sql);
     const both = Boolean(r.notifyBoth);
-    await sql.query(
-      `insert into vaani_reminders (id, owner_ten, contact_ten, payload, notify_both) values ($1, $2, $3, $4::jsonb, $5)
-       on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload, notify_both = excluded.notify_both`,
-      [r.id, digits(r.ownerTen), digits(r.contactTen), JSON.stringify({ ...r, notifyBoth: both }), both],
-    );
+    const payload = JSON.stringify({ ...r, notifyBoth: both });
+    try {
+      await sql.query(
+        `insert into vaani_reminders (id, owner_ten, contact_ten, payload, notify_both) values ($1, $2, $3, $4::jsonb, $5)
+         on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload, notify_both = excluded.notify_both`,
+        [r.id, digits(r.ownerTen), digits(r.contactTen), payload, both],
+      );
+    } catch {
+      await sql.query(
+        `insert into vaani_reminders (id, owner_ten, contact_ten, payload) values ($1, $2, $3, $4::jsonb)
+         on conflict (id) do update set owner_ten = excluded.owner_ten, contact_ten = excluded.contact_ten, payload = excluded.payload`,
+        [r.id, digits(r.ownerTen), digits(r.contactTen), payload],
+      );
+    }
     return { ok: true as const };
   });
 
@@ -884,15 +893,23 @@ export const listRemindersRemote = createServerFn({ method: "POST" })
     if (ten.length !== 10) return [];
     const sql = await getSql();
     await ensureVaaniSchema(sql);
-    const rows = await sql.query<{
+    let rows: {
       payload: unknown;
-      owner_ten: string;
-      contact_ten: string;
+      owner_ten?: string;
+      contact_ten?: string;
       notify_both?: boolean | string | number;
-    }>(
-      `select payload, owner_ten, contact_ten, notify_both from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
-      [ten],
-    );
+    }[] = [];
+    try {
+      rows = await sql.query(
+        `select payload, owner_ten, contact_ten, notify_both from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
+        [ten],
+      );
+    } catch {
+      rows = await sql.query(
+        `select payload, owner_ten, contact_ten from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
+        [ten],
+      );
+    }
     return rows.map((row) => {
       let raw: Record<string, unknown> = {};
       try {

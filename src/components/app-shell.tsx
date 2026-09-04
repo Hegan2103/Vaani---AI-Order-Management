@@ -213,9 +213,15 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       if (stop || isSignedOut()) return;
       try {
         if (isSignedOut()) return;
-        const remote = await listRemindersRemote({ data: { phone: me } });
+        const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
+        const remoteRaw = await listRemindersRemote({ data: { phone: login } });
         if (stop || isSignedOut()) return;
-        if (Array.isArray(remote) && remote.length) mergeReminders(remote as Reminder[]);
+        const remote = Array.isArray(remoteRaw)
+          ? remoteRaw
+          : remoteRaw && typeof remoteRaw === "object" && Array.isArray((remoteRaw as { result?: unknown }).result)
+            ? ((remoteRaw as { result: Reminder[] }).result)
+            : [];
+        if (remote.length) mergeReminders(remote as Reminder[]);
       } catch {
         /* local reminders */
       }
@@ -241,9 +247,17 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
           }
         }
       }
-      for (const r of listReminders().filter((row) => reminderNeedsBell(row, me))) {
-        markBellSeen(r.id, me);
-        const bells = { ...(r.bells || {}), [me]: new Date().toISOString().slice(0, 10) };
+      const who = liveLoginTen() || readLoginTen() || me;
+      for (const r of listReminders().filter((row) => reminderNeedsBell(row, who))) {
+        const seenKey = `vaani-rem-notice:${r.id}:${who}`;
+        try {
+          if (sessionStorage.getItem(seenKey) === "1") continue;
+          sessionStorage.setItem(seenKey, "1");
+        } catch {
+          /* continue */
+        }
+        markBellSeen(r.id, who);
+        const bells = { ...(r.bells || {}), [who]: new Date().toISOString().slice(0, 10) };
         const next = { ...r, bells };
         upsertReminder(next);
         try {
@@ -253,7 +267,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         }
         const owner = phoneDigits(r.ownerTen);
         const contact = phoneDigits(r.contactTen);
-        const other = me === owner ? contact : owner;
+        const other = who === owner ? contact : owner;
         const label = bookNameFor(other, r.contactName) || r.contactName || "Reminder";
         pushNotices([
           {
