@@ -220,6 +220,11 @@ export function rememberLoginTen(phone: string) {
 
 export function readLoginTen() {
   if (typeof window === "undefined") return "";
+  try {
+    if (sessionStorage.getItem("vaani-signed-out") === "1") return "";
+  } catch {
+    /* ignore */
+  }
   const tryTen = (raw: string) => {
     const t = phoneDigits(String(raw || ""));
     return t.length === 10 ? t : "";
@@ -280,6 +285,11 @@ export function readLoginTen() {
 
 export function liveLoginTen() {
   if (typeof window === "undefined") return "";
+  try {
+    if (sessionStorage.getItem("vaani-signed-out") === "1") return "";
+  } catch {
+    /* ignore */
+  }
   try {
     const attr = phoneDigits(document.documentElement.getAttribute("data-vaani-phone") || "");
     if (attr.length === 10) return attr;
