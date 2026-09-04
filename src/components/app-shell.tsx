@@ -388,3 +388,148 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     </div>
   );
 }
+
+function NoticeBell() {
+  const notices = useVaani((s) => s.notices);
+  const markNoticesRead = useVaani((s) => s.markNoticesRead);
+  const tickets = useVaani((s) => s.tickets);
+  const incoming = useVaani((s) => s.incoming);
+  const { t } = useT();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLSpanElement>(null);
+  const [box, setBox] = useState({ top: 0, left: 12, width: 288 });
+  const me = liveLoginTen() || readLoginTen();
+  const selling = Boolean(useVaani((s) => s.isVendor) || readShopIdentity(me)?.isVendor);
+  const visible = notices.filter((n) => {
+    if (String(n.ticketId || "").startsWith("reminder") || String(n.id || "").startsWith("rem-") || String(n.id || "").startsWith("push-") || String(n.id || "").startsWith("due-")) return true;
+    const ticket = tickets.find((row) => row.id === n.ticketId) || incoming.find((row) => row.id === n.ticketId);
+    if (!ticket || me.length !== 10) return false;
+    const buyer = phoneDigits(ticket.customerPhone);
+    const vendorTen = phoneDigits(ticket.vendorPhone || "") || String(ticket.vendorId).match(/(\d{10})/)?.[1] || "";
+    if (n.audience === "vendor") return selling && vendorTen === me && buyer !== me;
+    if (n.audience === "customer") return buyer === me && vendorTen !== me;
+    return false;
+  });
+  const unread = visible.filter((n) => !n.read).length;
+
+  function placeBox() {
+    const r = btnRef.current?.getBoundingClientRect();
+    const width = Math.min(288, Math.max(220, window.innerWidth - 24));
+    let left = (r?.left ?? 12);
+    if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
+    if (left < 12) left = 12;
+    setBox({ top: (r?.bottom ?? 56) + 8, left, width });
+  }
+
+  return (
+    <div className="relative">
+      <span ref={btnRef} className="relative inline-flex">
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="relative size-9"
+        aria-label={t("notifications")}
+        onClick={() => {
+          unlockBeep();
+          setOpen((v) => {
+            const next = !v;
+            if (next) placeBox();
+            return next;
+          });
+          if (!open) markNoticesRead();
+        }}
+      >
+        <Bell className="size-4" />
+        {unread > 0 ? (
+          <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-medium text-accent-fg">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        ) : null}
+      </Button>
+      </span>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+        <div
+          className="fixed z-[80] overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg"
+          style={{
+            top: box.top,
+            left: 12,
+            width: "calc(100vw - 24px)",
+            maxHeight: "min(16rem, 45dvh)",
+          }}
+        >
+          <p className="border-b border-line px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted">
+            {t("notifications")}
+          </p>
+          {visible.length === 0 ? (
+            <p className="px-3 py-6 text-sm text-muted">{t("noEvents")}</p>
+          ) : (
+            <ul className="max-h-80 overflow-auto">
+              {visible.map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left hover:bg-accent-soft"
+                    onClick={() => {
+                      setOpen(false);
+                      if (n.ticketId.startsWith("reminder:")) return;
+                      void navigate({
+                        to: "/ticket/$ticketId",
+                        params: { ticketId: n.ticketId },
+                      });
+                    }}
+                  >
+                    <p className="text-sm font-medium">{n.title}</p>
+                    <p className="text-xs text-muted">{n.body}</p>
+                    <p className="text-[10px] text-subtle">
+                      {new Date(n.at).toLocaleTimeString(useVaani.getState().language || "en-IN", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+function SignedInPhone({ phone }: { phone: string }) {
+  const { t } = useT();
+  const ten = phoneDigits(phone);
+  if (ten.length !== 10) {
+    return <span className="text-xs text-muted">{t("signedIn")}</span>;
+  }
+  return (
+    <span className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-medium">
+      {formatInPhone(ten)}
+    </span>
+  );
+}
+
+function AccountBar() {
+  const { t } = useT();
+  function leave() {
+    resetLoginGate();
+    try {
+      sessionStorage.removeItem("vaani-session-ok");
+    } catch {
+      /* ignore */
+    }
+    storeBearerToken(null);
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <Button type="button" size="sm" variant="outline" onClick={leave}>
+        {t("signOut")}
+      </Button>
+    </div>
+  );
+}
+
+export { StatusPill } from "@/components/status-pill";
