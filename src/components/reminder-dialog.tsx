@@ -1,15 +1,13 @@
 import { useState } from "react";
 import { Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { deleteReminderRemote, fireReminderPush, saveReminder } from "@/lib/vaani/account";
+import { deleteReminderRemote, saveReminder } from "@/lib/vaani/account";
 import { useT } from "@/lib/vaani/i18n";
 import {
   WEEKDAYS,
   blankReminder,
   deleteReminder,
-  isReminderDue,
   listReminders,
-  reminderTargets,
   upsertReminder,
 } from "@/lib/vaani/reminders";
 import { formatInPhone, phoneDigits } from "@/lib/vaani/seed";
@@ -74,30 +72,12 @@ function ReminderForm({
   }
 
   async function save() {
-    const today = new Date().toISOString().slice(0, 10);
     const next = { ...row, notifyBoth, contactName, ownerTen, contactTen, lastFired: "", bells: {} };
-    if (isReminderDue(next)) next.lastFired = today;
     upsertReminder(next);
     try {
       await saveReminder({ data: { reminder: next } });
     } catch {
       /* local copy kept */
-    }
-    if (notifyBoth) {
-      const others = reminderTargets(next);
-      if (others.length) {
-        try {
-          await fireReminderPush({
-            data: {
-              phones: others,
-              title: contactName || "Reminder",
-              body: next.message || contactName || "Reminder",
-            },
-          });
-        } catch {
-          /* in-app poll still */
-        }
-      }
     }
     setMsg(t("reminderSaved"));
   }

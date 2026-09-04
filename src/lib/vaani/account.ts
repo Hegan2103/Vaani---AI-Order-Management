@@ -883,21 +883,6 @@ export const saveReminder = createServerFn({ method: "POST" })
         [r.id, digits(r.ownerTen), digits(r.contactTen), payload],
       );
     }
-    if (both) {
-      const contact = digits(r.contactTen);
-      const owner = digits(r.ownerTen);
-      const title = (r.contactName || "Reminder").toString();
-      const body = (r.message || title).toString();
-      for (const phone of [contact, owner]) {
-        if (phone.length !== 10) continue;
-        const nid = `rem-${r.id}-${phone}`;
-        await sql.query(
-          `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)
-           on conflict (id) do update set title = excluded.title, body = excluded.body`,
-          [nid, phone, title, body, `reminder:${r.id}`],
-        );
-      }
-    }
     return { ok: true as const };
   });
 

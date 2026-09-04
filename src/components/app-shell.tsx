@@ -260,7 +260,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         } catch {
           /* local */
         }
-        const others = reminderTargets(r).filter((p) => p !== me);
+        const others = reminderTargets(r);
         if (others.length) {
           try {
             await fireReminderPush({
