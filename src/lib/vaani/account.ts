@@ -1010,9 +1010,10 @@ function reminderIsDue(row: { lastFired?: string; time?: string; repeat?: string
 
 export const processDueReminders = createServerFn({ method: "POST" })
   .middleware([vaaniGate])
-  .validator((input: { phone: string }) => input)
+  .validator((input: { phone: string; book?: Record<string, string> }) => input)
   .handler(async ({ data }) => {
     const ten = digits(data.phone);
+    const book = data.book && typeof data.book === "object" ? data.book : {};
     if (ten.length !== 10) return { fired: 0 };
     const sql = await getSql();
     await ensureVaaniSchema(sql);
@@ -1060,17 +1061,22 @@ export const processDueReminders = createServerFn({ method: "POST" })
       const contactPhone = reminder.contactTen;
       const body = reminder.message || reminder.contactName || "Reminder";
       const ownerTitle = reminder.contactName || "Reminder";
-      let contactTitle = ownerTitle;
-      try {
-        const shops = await sql.query<{ shop_name: string }>(
-          `select shop_name from vaani_profiles where phone = $1 or right(regexp_replace(coalesce(phone,''), '[^0-9]', '', 'g'), 10) = $1 limit 1`,
-          [ownerPhone],
-        );
-        const shop = (Array.isArray(shops) ? shops : []).find((s) => (s.shop_name || "").trim());
-        if (shop?.shop_name?.trim()) contactTitle = shop.shop_name.trim();
-      } catch {
-        /* keep owner title */
+      let contactTitle = "";
+      const bookHit = String(book[ownerPhone] || book[digits(ownerPhone)] || "").trim();
+      if (ten === contactPhone && bookHit) contactTitle = bookHit;
+      if (!contactTitle) {
+        try {
+          const shops = await sql.query<{ shop_name: string }>(
+            `select shop_name from vaani_profiles where phone = $1 or right(regexp_replace(coalesce(phone,''), '[^0-9]', '', 'g'), 10) = $1 limit 1`,
+            [ownerPhone],
+          );
+          const shop = (Array.isArray(shops) ? shops : []).find((s) => (s.shop_name || "").trim());
+          if (shop?.shop_name?.trim()) contactTitle = shop.shop_name.trim();
+        } catch {
+          /* keep empty */
+        }
       }
+      if (!contactTitle) contactTitle = "Reminder";
       const phones = reminder.notifyBoth
         ? [ownerPhone, contactPhone].filter((p) => p.length === 10)
         : [ownerPhone].filter((p) => p.length === 10);
