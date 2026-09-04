@@ -178,9 +178,15 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   }, []);
 
   useEffect(() => {
-    if (pathname === "/vendor") setRole("vendor");
-    else if (pathname === "/") setRole("customer");
-  }, [pathname, setRole]);
+    if (pathname === "/vendor") {
+      if (!selling) {
+        setRole("customer");
+        void navigate({ to: "/" });
+        return;
+      }
+      setRole("vendor");
+    } else if (pathname === "/") setRole("customer");
+  }, [pathname, setRole, selling, navigate]);
 
   useEffect(() => {
     const lang = language || "en-IN";

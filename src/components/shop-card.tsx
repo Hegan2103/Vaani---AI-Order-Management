@@ -87,7 +87,11 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     };
     load();
     window.addEventListener("vaani-auth", load);
-    return () => window.removeEventListener("vaani-auth", load);
+    window.addEventListener("vaani-shop", load);
+    return () => {
+      window.removeEventListener("vaani-auth", load);
+      window.removeEventListener("vaani-shop", load);
+    };
   }, [loginTen]);
 
   const shown = id || LOCKED;
@@ -148,6 +152,24 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     }).catch(() => {
       /* local shop still saved */
     });
+    window.dispatchEvent(new Event("vaani-shop"));
+  }
+
+  function setSellNow(on: boolean) {
+    setSellDraft(on);
+    const shopName = (nameRef.current?.value || shopDraft || savedName).trim();
+    if (!shopName || loginTen.length !== 10) return;
+    const identity: ShopIdentity = {
+      shopName,
+      phone: formatInPhone(loginTen),
+      industry: industryDraft || savedIndustry,
+      isVendor: on,
+      language: langDraft || savedLang || "en-IN",
+    };
+    remember(identity);
+    setId(identity);
+    setShopIdentity(identity);
+    window.dispatchEvent(new Event("vaani-shop"));
   }
 
   return (
@@ -222,7 +244,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             ))}
           </select>
           <label className="mt-3 flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-1" checked={sellDraft} onChange={(e) => setSellDraft(e.target.checked)} />
+            <input type="checkbox" className="mt-1" checked={sellDraft} onChange={(e) => setSellNow(e.target.checked)} />
             <span>
               <span className="font-medium">{t("sellOnVaaniShort")}</span>
               <span className="mt-0.5 block text-xs text-muted">{t("sellOnVaani")}</span>
