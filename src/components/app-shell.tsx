@@ -243,7 +243,28 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       );
       try {
         const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-        await processDueReminders({ data: { phone: login, book: readBookNames() } });
+        const dueRes = await processDueReminders({ data: { phone: login, book: readBookNames() } });
+        const duePack =
+          dueRes && typeof dueRes === "object" && Array.isArray((dueRes as { notices?: unknown }).notices)
+            ? (dueRes as { notices: Array<{ id: string; title: string; body: string; ticketId: string }> })
+            : dueRes && typeof dueRes === "object" && Array.isArray((dueRes as { result?: { notices?: unknown } }).result?.notices)
+              ? ((dueRes as { result: { notices: Array<{ id: string; title: string; body: string; ticketId: string }> } }).result)
+              : { notices: [] as Array<{ id: string; title: string; body: string; ticketId: string }> };
+        for (const n of duePack.notices) {
+          if (!String(n.id || "").startsWith("due-")) continue;
+          if (useVaani.getState().notices.some((row) => row.id === n.id)) continue;
+          pushNotices([
+            {
+              id: n.id,
+              at: new Date().toISOString(),
+              title: n.title,
+              body: n.body,
+              ticketId: n.ticketId,
+              read: false,
+              audience: useVaani.getState().role,
+            },
+          ]);
+        }
         const again = await listRemindersRemote({ data: { phone: login } });
         const againRows = Array.isArray(again)
           ? again
@@ -265,37 +286,18 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       for (const r of latestByPair.values()) {
         const targets = reminderTargets(r);
         if (!targets.includes(login)) continue;
-        const dueNow = isReminderDue(r) || dueNowIds.has(r.id);
+        const dueNow = isReminderDue(r) || dueNowIds.has(r.id) || (r.lastFired || "") === today;
         if (!dueNow) continue;
-        if (phoneDigits(r.ownerTen) === login) {
-          const lock = `vaani-fired:${r.id}:${today}`;
-          let first = true;
-          try {
-            first = localStorage.getItem(lock) !== "1";
-            if (first) localStorage.setItem(lock, "1");
-          } catch {
-            first = true;
-          }
-          if (first) {
-            const next = { ...r, lastFired: today };
-            upsertReminder(next);
-            void fireReminderPush({
-              data: {
-                phones: [login],
-                title: bookNameFor(phoneDigits(r.contactTen), r.contactName) || r.contactName || "Reminder",
-                body: r.message || r.contactName || "Reminder",
-              },
-            }).catch(() => undefined);
-          }
-        }
         const nid = `bell-${r.id}-${login}-${today}`;
-        const pairIds = listReminders()
-          .filter((row) => phoneDigits(row.ownerTen) === phoneDigits(r.ownerTen) && phoneDigits(row.contactTen) === phoneDigits(r.contactTen))
-          .map((row) => `reminder:${row.id}`);
-        useVaani.setState((s) => ({
-          notices: s.notices.filter((n) => !pairIds.includes(String(n.ticketId)) || n.id === nid),
-        }));
-        if (useVaani.getState().notices.some((n) => n.id === nid)) continue;
+        let firstBell = true;
+        try {
+          firstBell = localStorage.getItem(nid) !== "1";
+          if (firstBell) localStorage.setItem(nid, "1");
+        } catch {
+          firstBell = true;
+        }
+        if (!firstBell) continue;
+        if (useVaani.getState().notices.some((n) => n.id === nid || n.id.startsWith(`due-${r.id}-`))) continue;
         const owner = phoneDigits(r.ownerTen);
         const contact = phoneDigits(r.contactTen);
         const other = login === owner ? contact : owner;
