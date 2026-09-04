@@ -225,6 +225,34 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       } catch {
         /* local reminders */
       }
+      const who = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
+      for (const r of listReminders().filter((row) => reminderNeedsBell(row, who))) {
+        const nid = `due-${r.id}-${who}`;
+        if (useVaani.getState().notices.some((n) => n.id === nid || n.ticketId === `reminder:${r.id}`)) continue;
+        try {
+          if (sessionStorage.getItem(`vaani-bell:${nid}`) === "1") continue;
+          sessionStorage.setItem(`vaani-bell:${nid}`, "1");
+        } catch {
+          /* continue */
+        }
+        markBellSeen(r.id, who);
+        const owner = phoneDigits(r.ownerTen);
+        const contact = phoneDigits(r.contactTen);
+        const other = who === owner ? contact : owner;
+        const label = bookNameFor(other, r.contactName) || r.contactName || "Reminder";
+        pushNotices([
+          {
+            id: nid,
+            at: new Date().toISOString(),
+            title: label,
+            body: r.message || label,
+            ticketId: `reminder:${r.id}`,
+            read: false,
+            audience: useVaani.getState().role,
+          },
+        ]);
+        playBeep();
+      }
       try {
         const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
         const dueRaw = await processDueReminders({ data: { phone: login } });
