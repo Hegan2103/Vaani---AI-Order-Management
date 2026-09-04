@@ -43,9 +43,12 @@ export function mergeReminders(extra: Reminder[]) {
       map.set(r.id, r);
       continue;
     }
-    const newer = (r.lastFired || "") > (prev.lastFired || "") ? r : prev;
-    const older = newer === r ? prev : r;
-    map.set(r.id, { ...newer, bells: { ...(older.bells || {}), ...(newer.bells || {}) } });
+    map.set(r.id, {
+      ...prev,
+      ...r,
+      bells: { ...(prev.bells || {}), ...(r.bells || {}) },
+      lastFired: (r.lastFired || "") >= (prev.lastFired || "") ? r.lastFired || prev.lastFired : prev.lastFired,
+    });
   }
   saveAll([...map.values()]);
 }
