@@ -1071,7 +1071,7 @@ export const processDueReminders = createServerFn({ method: "POST" })
       }
       fired += 1;
     }
-    if (!notices.length) {
+    {
       const extra = await sql.query<{ id: string; title: string; body: string; ticket_id: string }>(
         `select id, title, body, ticket_id from vaani_inbox where phone = $1 and created_at > now() - interval '20 minutes' order by created_at desc limit 20`,
         [ten],

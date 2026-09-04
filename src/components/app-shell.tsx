@@ -225,34 +225,6 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       } catch {
         /* local reminders */
       }
-      const who = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-      for (const r of listReminders().filter((row) => reminderNeedsBell(row, who))) {
-        const nid = `due-${r.id}-${who}`;
-        if (useVaani.getState().notices.some((n) => n.id === nid || n.ticketId === `reminder:${r.id}`)) continue;
-        try {
-          if (sessionStorage.getItem(`vaani-bell:${nid}`) === "1") continue;
-          sessionStorage.setItem(`vaani-bell:${nid}`, "1");
-        } catch {
-          /* continue */
-        }
-        markBellSeen(r.id, who);
-        const owner = phoneDigits(r.ownerTen);
-        const contact = phoneDigits(r.contactTen);
-        const other = who === owner ? contact : owner;
-        const label = bookNameFor(other, r.contactName) || r.contactName || "Reminder";
-        pushNotices([
-          {
-            id: nid,
-            at: new Date().toISOString(),
-            title: label,
-            body: r.message || label,
-            ticketId: `reminder:${r.id}`,
-            read: false,
-            audience: useVaani.getState().role,
-          },
-        ]);
-        playBeep();
-      }
       try {
         const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
         const dueRaw = await processDueReminders({ data: { phone: login } });
@@ -290,37 +262,6 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         }
       } catch {
         /* server due optional */
-      }
-      try {
-        const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-        const owned = listReminders().some((r) => phoneDigits(r.ownerTen) === login);
-        const isCustomerSide = !owned || useVaani.getState().role === "customer";
-        if (isCustomerSide) {
-          const inboxRaw = await listInboxNotices({ data: { phone: login } });
-          const inboxRows = Array.isArray(inboxRaw)
-            ? inboxRaw
-            : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
-              ? ((inboxRaw as { result: { id: string; title?: string; body?: string; ticketId?: string; at?: string }[] }).result)
-              : [];
-          const have = new Set(useVaani.getState().notices.map((n) => n.id));
-          const fresh = inboxRows.filter((n) => n.id && !have.has(n.id));
-          if (fresh.length) {
-            pushNotices(
-              fresh.map((n) => ({
-                id: n.id,
-                at: n.at || new Date().toISOString(),
-                title: n.title || "Reminder",
-                body: n.body || n.title || "Reminder",
-                ticketId: String(n.ticketId || "").startsWith("reminder") ? n.ticketId : `reminder:${n.id}`,
-                read: false,
-                audience: "customer" as const,
-              })),
-            );
-            playBeep();
-          }
-        }
-      } catch {
-        /* customer inbox only */
       }
     }
     void tick();
