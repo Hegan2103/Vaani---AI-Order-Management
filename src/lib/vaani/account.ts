@@ -1056,13 +1056,16 @@ export const processDueReminders = createServerFn({ method: "POST" })
         [row.id, JSON.stringify(next), stamp],
       );
       if (!claimed.length) continue;
+      const ownerPhone = reminder.ownerTen;
+      const contactPhone = reminder.contactTen;
+      const body = reminder.message || reminder.contactName || "Reminder";
+      const ownerTitle = reminder.contactName || "Reminder";
+      await sendPushToPhones([ownerPhone].filter((p) => p.length === 10), ownerTitle, body, "/");
       const phones = reminder.notifyBoth
-        ? [reminder.ownerTen, reminder.contactTen].filter((p) => p.length === 10)
-        : [reminder.ownerTen].filter((p) => p.length === 10);
-      const title = reminder.contactName || "Reminder";
-      const body = reminder.message || title;
-      await sendPushToPhones(phones, title, body, "/");
+        ? [ownerPhone, contactPhone].filter((p) => p.length === 10)
+        : [ownerPhone].filter((p) => p.length === 10);
       for (const phone of phones) {
+        const title = phone === ownerPhone ? ownerTitle : ownerTitle;
         const nid = `due-${row.id}-${phone}-${stamp}`;
         await sql.query(
           `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)

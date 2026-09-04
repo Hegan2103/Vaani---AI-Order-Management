@@ -267,9 +267,29 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             void saveReminder({ data: { reminder: next } }).catch(() => undefined);
             void fireReminderPush({
               data: {
-                phones: targets,
-                title: r.contactName || "Reminder",
+                phones: [login],
+                title: bookNameFor(phoneDigits(r.contactTen), r.contactName) || r.contactName || "Reminder",
                 body: r.message || r.contactName || "Reminder",
+              },
+            }).catch(() => undefined);
+          }
+        }
+        if (dueNow && phoneDigits(r.contactTen) === login && phoneDigits(r.ownerTen) !== login) {
+          const rlock = `vaani-recv-push:${r.id}:${today}`;
+          let rfirst = true;
+          try {
+            rfirst = localStorage.getItem(rlock) !== "1";
+            if (rfirst) localStorage.setItem(rlock, "1");
+          } catch {
+            rfirst = true;
+          }
+          if (rfirst) {
+            const fromName = bookNameFor(phoneDigits(r.ownerTen), "") || "Reminder";
+            void fireReminderPush({
+              data: {
+                phones: [login],
+                title: fromName,
+                body: r.message || fromName,
               },
             }).catch(() => undefined);
           }
