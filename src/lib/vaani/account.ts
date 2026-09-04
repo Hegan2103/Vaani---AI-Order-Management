@@ -973,6 +973,98 @@ export const listInboxNotices = createServerFn({ method: "POST" })
     }));
   });
 
+
+function kolkataNow() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    weekday: "short",
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || "";
+  const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
+  return {
+    stamp: `${get("year")}-${get("month")}-${get("day")}`,
+    minutes: Number(get("hour")) * 60 + Number(get("minute")),
+    day: day < 0 ? new Date().getDay() : day,
+  };
+}
+
+function reminderIsDue(row: { lastFired?: string; time?: string; repeat?: string; weekday?: number; date?: string; from?: string; to?: string }) {
+  const now = kolkataNow();
+  if ((row.lastFired || "") === now.stamp) return false;
+  const [h, m] = String(row.time || "09:00").split(":").map((n) => Number(n));
+  if (now.minutes < (h || 0) * 60 + (m || 0)) return false;
+  if (row.repeat === "weekly") return now.day === (row.weekday ?? 1);
+  if (row.repeat === "once") return (row.date || "") === now.stamp;
+  if (row.repeat === "range") return now.stamp >= (row.from || now.stamp) && now.stamp <= (row.to || now.stamp);
+  return true;
+}
+
+export const processDueReminders = createServerFn({ method: "POST" })
+  .middleware([vaaniGate])
+  .validator((input: { phone: string }) => input)
+  .handler(async ({ data }) => {
+    const ten = digits(data.phone);
+    if (ten.length !== 10) return { fired: 0 };
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    const rows = await sql.query<{ id: string; owner_ten: string; contact_ten: string; payload: unknown; notify_both?: boolean }>(
+      `select id, owner_ten, contact_ten, payload from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
+      [ten],
+    );
+    const { sendPushToPhones } = await import("./push-server");
+    let fired = 0;
+    const stamp = kolkataNow().stamp;
+    for (const row of rows) {
+      let raw: Record<string, unknown> = {};
+      try {
+        const p = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+        if (p && typeof p === "object") raw = p as Record<string, unknown>;
+      } catch {
+        raw = {};
+      }
+      const reminder = {
+        ...raw,
+        lastFired: String(raw.lastFired || ""),
+        time: String(raw.time || "09:00"),
+        repeat: String(raw.repeat || "daily"),
+        weekday: Number(raw.weekday ?? 1),
+        date: String(raw.date || ""),
+        from: String(raw.from || ""),
+        to: String(raw.to || ""),
+        notifyBoth: raw.notifyBoth === true,
+        contactName: String(raw.contactName || "Reminder"),
+        message: String(raw.message || ""),
+        ownerTen: digits(String(raw.ownerTen || row.owner_ten)),
+        contactTen: digits(String(raw.contactTen || row.contact_ten)),
+      };
+      if (!reminderIsDue(reminder)) continue;
+      const next = { ...raw, ...reminder, lastFired: stamp };
+      await sql.query(`update vaani_reminders set payload = $2::jsonb where id = $1`, [row.id, JSON.stringify(next)]);
+      const phones = reminder.notifyBoth
+        ? [reminder.ownerTen, reminder.contactTen].filter((p) => p.length === 10)
+        : [reminder.ownerTen].filter((p) => p.length === 10);
+      const title = reminder.contactName || "Reminder";
+      const body = reminder.message || title;
+      await sendPushToPhones(phones, title, body, "/");
+      for (const phone of phones) {
+        const nid = `due-${row.id}-${phone}-${stamp}`;
+        await sql.query(
+          `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)
+           on conflict (id) do nothing`,
+          [nid, phone, title, body, `reminder:${row.id}`],
+        );
+      }
+      fired += 1;
+    }
+    return { fired };
+  });
+
 export const fireReminderPush = createServerFn({ method: "POST" })
   .middleware([vaaniGate])
   .validator((input: { phones: string[]; title: string; body: string }) => input)

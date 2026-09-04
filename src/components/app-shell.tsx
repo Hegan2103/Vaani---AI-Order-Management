@@ -6,7 +6,7 @@ import { resetLoginGate, isSignedOut } from "@/components/login-screen";
 import { VendorHome } from "@/components/vendor-home";
 import { CallScreen } from "@/routes/call.$vendorId";
 import { Button } from "@/components/ui/button";
-import { fireReminderPush, listPublicVendors, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
+import { fireReminderPush, listInboxNotices, listPublicVendors, listRemindersRemote, processDueReminders, saveReminder } from "@/lib/vaani/account";
 import { cn } from "@/lib/cn";
 import { unlockBeep, playBeep, diffTicketEvents } from "@/lib/vaani/notify";
 import { enablePush, showLocalPopup } from "@/lib/vaani/push-client";
@@ -224,6 +224,34 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         if (remote.length) mergeReminders(remote as Reminder[]);
       } catch {
         /* local reminders */
+      }
+      try {
+        const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
+        await processDueReminders({ data: { phone: login } });
+        const inbox = await listInboxNotices({ data: { phone: login } });
+        const rows = Array.isArray(inbox) ? inbox : [];
+        const have = new Set(useVaani.getState().notices.map((n) => n.id));
+        const fresh = rows.filter((n) => {
+          if (!n.id || have.has(n.id)) return false;
+          const at = Date.parse(String(n.at || ""));
+          return Number.isFinite(at) && Date.now() - at <= 90 * 1000;
+        });
+        if (fresh.length) {
+          pushNotices(
+            fresh.map((n) => ({
+              id: n.id,
+              at: n.at || new Date().toISOString(),
+              title: n.title || "Reminder",
+              body: n.body || n.title || "Reminder",
+              ticketId: String(n.ticketId || "").startsWith("reminder") ? n.ticketId : `reminder:${n.id}`,
+              read: false,
+              audience: useVaani.getState().role,
+            })),
+          );
+          playBeep();
+        }
+      } catch {
+        /* server due optional */
       }
       const whoNow = liveLoginTen() || readLoginTen() || me;
       const due = listReminders().filter((r) => isReminderDue(r) && phoneDigits(r.ownerTen) === whoNow);
