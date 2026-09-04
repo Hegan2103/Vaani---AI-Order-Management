@@ -724,14 +724,13 @@ export const saveTicket = createServerFn({ method: "POST" })
       const saver = digits(String(context.userId || "").replace(/^vaani-/, ""));
       const buyer = digits(t.customerPhone);
       const targets: string[] = [];
+      const vendorActed = t.lines.some((l) =>
+        l.status === "rejected" || l.status === "accepted" || l.status === "quoted" || l.status === "confirmed",
+      );
       if (t.status !== "draft") {
-        if (saver && saver === vendorTen && buyer && buyer !== saver) targets.push(buyer);
-        else if (saver && saver === buyer && vendorTen && vendorTen !== saver) targets.push(vendorTen);
-        else if (t.lines.some((l) => l.status !== "pending")) {
-          if (buyer && buyer !== vendorTen) targets.push(buyer);
-        } else if (vendorTen && vendorTen !== buyer) {
-          targets.push(vendorTen);
-        }
+        if (vendorActed && buyer && buyer !== vendorTen) targets.push(buyer);
+        else if (saver === buyer && vendorTen && vendorTen !== buyer) targets.push(vendorTen);
+        else if (vendorTen && vendorTen !== buyer && vendorTen !== saver) targets.push(vendorTen);
       }
       const title =
         t.status === "finalized"

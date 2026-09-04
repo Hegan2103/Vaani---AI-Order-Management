@@ -194,6 +194,8 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       if (!ticket || me.length !== 10) return false;
       const buyer = phoneDigits(ticket.customerPhone);
       const vendorTen = phoneDigits(ticket.vendorPhone || "") || String(ticket.vendorId).match(/(\d{10})/)?.[1] || "";
+      if (vendorTen === me && e.audience === "customer") return false;
+      if (buyer === me && e.audience === "vendor") return false;
       if (e.audience === "vendor") return selling && vendorTen === me && buyer !== me;
       if (e.audience === "customer") return buyer === me && vendorTen !== me;
       return false;
