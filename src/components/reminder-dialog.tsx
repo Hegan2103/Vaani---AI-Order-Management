@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { deleteReminderRemote, saveReminder } from "@/lib/vaani/account";
+import { deleteReminderRemote, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
 import { useT } from "@/lib/vaani/i18n";
 import {
   WEEKDAYS,
   blankReminder,
   deleteReminder,
   listReminders,
+  mergeReminders,
   upsertReminder,
 } from "@/lib/vaani/reminders";
 import { formatInPhone, phoneDigits } from "@/lib/vaani/seed";
@@ -61,13 +62,32 @@ function ReminderForm({
   const { t } = useT();
   const ownerTen = liveLoginTen() || readLoginTen();
   const contactTen = phoneDigits(contactPhone);
-  const existing = listReminders()
-    .filter((r) => r.ownerTen === ownerTen && r.contactTen === contactTen)
-    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+  function latestForPair() {
+    return listReminders()
+      .filter((r) => phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen)
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+  }
+  const existing = latestForPair();
   const [row, setRow] = useState<Reminder>(
     existing || blankReminder(ownerTen, contactTen, contactName, notifyBoth),
   );
   const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stop = false;
+    void listRemindersRemote({ data: { phone: ownerTen } })
+      .then((remote) => {
+        if (stop) return;
+        const rows = Array.isArray(remote) ? remote : [];
+        if (rows.length) mergeReminders(rows as Reminder[]);
+        const hit = latestForPair();
+        if (hit) setRow((cur) => ({ ...cur, ...hit, notifyBoth, contactName, ownerTen, contactTen }));
+      })
+      .catch(() => undefined);
+    return () => {
+      stop = true;
+    };
+  }, [ownerTen, contactTen]);
 
   function patch(part: Partial<Reminder>) {
     setRow((r) => ({ ...r, ...part, notifyBoth }));
