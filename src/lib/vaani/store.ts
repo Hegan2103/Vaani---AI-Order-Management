@@ -1125,10 +1125,24 @@ export const useVaani = create<State>()(
       storage: createJSONStorage(() => ({
         getItem: (name) => {
           if (typeof window === "undefined") return null;
+          try {
+            if (sessionStorage.getItem("vaani-signed-out") === "1" || localStorage.getItem("vaani-signed-out") === "1") return null;
+          } catch {
+            /* ignore */
+          }
           return localStorage.getItem(name) || sessionStorage.getItem(name);
         },
         setItem: (name, value) => {
           if (typeof window === "undefined") return;
+          try {
+            if (sessionStorage.getItem("vaani-signed-out") === "1" || localStorage.getItem("vaani-signed-out") === "1") {
+              localStorage.removeItem(name);
+              sessionStorage.removeItem(name);
+              return;
+            }
+          } catch {
+            /* ignore */
+          }
           try {
             const prevRaw = localStorage.getItem(name);
             if (prevRaw) {
@@ -1138,7 +1152,7 @@ export const useVaani = create<State>()(
               const ps = prev.state ?? (prev as Partial<State>);
               const nextEmpty = !String(ns.customerName || "").trim() && !ns.tickets?.length && !ns.incoming?.length;
               const prevFull = Boolean(String(ps.customerName || "").trim() || ps.tickets?.length || ps.incoming?.length);
-              if (nextEmpty && prevFull) return;
+              if (nextEmpty && prevFull && sessionStorage.getItem("vaani-signed-out") !== "1" && localStorage.getItem("vaani-signed-out") !== "1") return;
               if (!ns.tickets?.length && ps.tickets?.length) ns.tickets = ps.tickets;
               if (!ns.incoming?.length && ps.incoming?.length) ns.incoming = ps.incoming;
               if (!String(ns.customerName || "").trim() && String(ps.customerName || "").trim()) {

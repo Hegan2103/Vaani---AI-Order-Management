@@ -85,6 +85,12 @@ export function resetLoginGate() {
   signedOutLock = true;
   typed = "";
   try {
+    sessionStorage.setItem("vaani-signed-out", "1");
+    localStorage.setItem("vaani-signed-out", "1");
+  } catch {
+    /* ignore */
+  }
+  try {
     const phoneKey = loginPhoneKey();
     localStorage.removeItem(ENTERED_KEY);
     sessionStorage.removeItem(ENTERED_KEY);
