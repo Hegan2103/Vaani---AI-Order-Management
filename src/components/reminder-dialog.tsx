@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { deleteReminderRemote, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
@@ -138,8 +139,10 @@ function ReminderForm({
 
   async function save() {
     if (saving) return;
-    setSaving(true);
-    setMsg(null);
+    flushSync(() => {
+      setSaving(true);
+      setMsg(null);
+    });
     const next = {
       ...row,
       id: crypto.randomUUID(),
@@ -190,18 +193,19 @@ function ReminderForm({
         if (!saving) onClose();
       }}
     >
+      {saving ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/50">
+          <div className="flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-line bg-surface px-8 py-6">
+            <Loader2 className="size-8 animate-spin text-accent" />
+            <p className="text-sm font-medium">{t("saving")}</p>
+            <p className="text-xs text-muted">{t("pleaseWait")}</p>
+          </div>
+        </div>
+      ) : null}
       <div
         className="relative w-full max-w-md rounded-[var(--radius-xl)] border border-line bg-surface p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        {saving ? (
-          <div className="absolute inset-0 z-10 grid place-items-center rounded-[var(--radius-xl)] bg-surface/80">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Loader2 className="size-5 animate-spin" />
-              {t("saving")}
-            </div>
-          </div>
-        ) : null}
         <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("setReminder")}</p>
         <p className="mt-1 font-medium">
           {contactName} · {formatInPhone(contactTen)}
