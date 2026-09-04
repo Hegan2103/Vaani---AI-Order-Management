@@ -419,36 +419,41 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
   }
 
   return (
-    <main className="min-h-dvh bg-bg text-ink">
-      <div className="mx-auto max-w-md px-4 pb-10 pt-8">
-        <div className="w-full rounded-[var(--radius-xl)] border border-line bg-surface p-6">
-          <div className="mb-4 flex justify-end">
-            <select
-              aria-label={t("language")}
-              value={language || "en-IN"}
-              onChange={(e) => {
-                const next = e.target.value;
-                setLanguage(next);
-                writeUiLanguage(next);
-                document.documentElement.lang = next;
-                document.documentElement.dir = next.startsWith("ur") ? "rtl" : "ltr";
-              }}
-              className="relative z-20 h-11 min-w-[8rem] rounded-[var(--radius-sm)] border border-line bg-bg px-2 text-sm"
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
+    <main className="relative flex min-h-dvh flex-col bg-bg text-ink">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(ellipse_at_top,var(--accent-soft),transparent_70%)]" />
+      <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col px-4 pb-4 pt-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <p className="font-display text-4xl tracking-tight">Vaani</p>
+            <p className="mt-1 text-sm text-muted">Your Order Assistant</p>
           </div>
-          <p className="font-display text-3xl tracking-tight">Vaani</p>
-          <h1 className="mt-1 text-lg font-medium">{t("signIn")}</h1>
+          <select
+            aria-label={t("language")}
+            value={language || "en-IN"}
+            onChange={(e) => {
+              const next = e.target.value;
+              setLanguage(next);
+              writeUiLanguage(next);
+              document.documentElement.lang = next;
+              document.documentElement.dir = next.startsWith("ur") ? "rtl" : "ltr";
+            }}
+            className="relative z-20 h-10 rounded-full border border-line bg-surface px-3 text-sm"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="w-full rounded-[var(--radius-xl)] border border-line bg-surface p-6 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.35)]">
+          <h1 className="text-lg font-medium">{t("signIn")}</h1>
 
           {step === "phone" ? (
             <>
-              <p className="mt-3 text-sm text-muted">{t("enterMobile")}</p>
-              <p className="mt-5 text-xs text-muted">{t("mobile")}</p>
+              <p className="mt-2 text-sm text-muted">{t("enterMobile")}</p>
+              <p className="mt-5 text-xs font-medium uppercase tracking-wide text-muted">{t("mobile")}</p>
               <div className="mt-1 flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-white px-3 py-3">
                 <span className="text-sm text-muted">+91</span>
                 <input
@@ -482,10 +487,14 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               >
                 {t("sendCode")}
               </button>
-              <p className="mt-5 text-center text-sm font-medium tracking-wide text-muted">OR</p>
+              <div className="mt-5 flex items-center gap-3">
+                <span className="h-px flex-1 bg-line" />
+                <span className="text-xs font-medium tracking-[0.2em] text-muted">OR</span>
+                <span className="h-px flex-1 bg-line" />
+              </div>
               <button
                 type="button"
-                className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] border border-line bg-surface text-base font-medium"
+                className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] border border-line bg-white text-base font-medium"
                 disabled={busy}
                 onClick={() => {
                   setBusy(true);
@@ -508,7 +517,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
             </>
           ) : (
             <>
-              <p className="mt-3 text-sm text-muted">
+              <p className="mt-2 text-sm text-muted">
                 {t("enterOtp", { phone: `+91 ${phone.slice(0, 5)} ${phone.slice(5)}` })}
               </p>
               {previewCode ? (
@@ -516,7 +525,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                   {t("previewCode", { code: previewCode })}
                 </p>
               ) : null}
-              <p className="mt-5 text-xs text-muted">{t("otpLabel")}</p>
+              <p className="mt-5 text-xs font-medium uppercase tracking-wide text-muted">{t("otpLabel")}</p>
               <input
                 ref={otpRef}
                 type="tel"
@@ -561,6 +570,10 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
           )}
           {err ? <p className="mt-3 text-sm text-danger">{err}</p> : null}
         </div>
+
+        <p className="mt-auto pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-sm text-muted">
+          Made in India 🇮🇳❤️
+        </p>
       </div>
     </main>
   );
