@@ -84,7 +84,7 @@ function ReminderForm({
       /* local copy kept */
     }
     if (notifyBoth) {
-      const others = reminderTargets(next).filter((p) => p !== ownerTen);
+      const others = reminderTargets(next);
       if (others.length) {
         try {
           await fireReminderPush({

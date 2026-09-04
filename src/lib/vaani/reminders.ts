@@ -102,7 +102,7 @@ export function reminderNeedsBell(row: Reminder, me: string): boolean {
   const contact = phoneDigits(row.contactTen);
   const today = todayStamp();
   if ((row.bells || {})[ten] === today) return false;
-  if (row.notifyBoth && contact === ten && owner !== ten) return true;
+  if (row.notifyBoth && owner !== contact && (contact === ten || owner === ten)) return true;
   if (!reminderTargets(row).includes(ten)) return false;
   return (row.lastFired || "") === today;
 }
