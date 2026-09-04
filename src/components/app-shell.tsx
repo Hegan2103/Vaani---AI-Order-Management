@@ -265,9 +265,9 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       for (const r of latestByPair.values()) {
         const targets = reminderTargets(r);
         if (!targets.includes(login)) continue;
-        const dueNow = isReminderDue(r) || dueNowIds.has(r.id) || (r.lastFired || "") === today;
+        const dueNow = isReminderDue(r) || dueNowIds.has(r.id);
         if (!dueNow) continue;
-        const nid = `bell-${r.id}-${login}-${today}`;
+        const nid = `bell-${phoneDigits(r.ownerTen)}-${phoneDigits(r.contactTen)}-${login}-${today}`;
         let firstBell = true;
         try {
           firstBell = localStorage.getItem(nid) !== "1";
