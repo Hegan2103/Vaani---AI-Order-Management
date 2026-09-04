@@ -235,6 +235,12 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       } catch {
         /* local reminders */
       }
+      const loginEarly = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
+      const dueNowIds = new Set(
+        listReminders()
+          .filter((r) => reminderTargets(r).includes(loginEarly) && isReminderDue(r))
+          .map((r) => r.id),
+      );
       try {
         const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
         await processDueReminders({ data: { phone: login, book: readBookNames() } });
@@ -259,7 +265,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       for (const r of latestByPair.values()) {
         const targets = reminderTargets(r);
         if (!targets.includes(login)) continue;
-        const dueNow = isReminderDue(r);
+        const dueNow = isReminderDue(r) || dueNowIds.has(r.id);
         if (!dueNow) continue;
         if (phoneDigits(r.ownerTen) === login) {
           const lock = `vaani-fired:${r.id}:${today}`;
