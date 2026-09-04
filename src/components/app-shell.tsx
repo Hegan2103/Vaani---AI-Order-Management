@@ -419,6 +419,8 @@ function NoticeBell() {
   const { t } = useT();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLSpanElement>(null);
+  const [box, setBox] = useState({ top: 0, left: 12, width: 288 });
   const me = liveLoginTen() || readLoginTen();
   const selling = Boolean(useVaani((s) => s.isVendor) || readShopIdentity(me)?.isVendor);
   const visible = notices.filter((n) => {
@@ -433,8 +435,18 @@ function NoticeBell() {
   });
   const unread = visible.filter((n) => !n.read).length;
 
+  function placeBox() {
+    const r = btnRef.current?.getBoundingClientRect();
+    const width = Math.min(288, Math.max(220, window.innerWidth - 24));
+    let left = (r?.left ?? 12);
+    if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
+    if (left < 12) left = 12;
+    setBox({ top: (r?.bottom ?? 56) + 8, left, width });
+  }
+
   return (
     <div className="relative">
+      <span ref={btnRef} className="relative inline-flex">
       <Button
         type="button"
         size="icon"
@@ -443,7 +455,11 @@ function NoticeBell() {
         aria-label={t("notifications")}
         onClick={() => {
           unlockBeep();
-          setOpen((v) => !v);
+          setOpen((v) => {
+            const next = !v;
+            if (next) placeBox();
+            return next;
+          });
           if (!open) markNoticesRead();
         }}
       >
@@ -454,8 +470,12 @@ function NoticeBell() {
           </span>
         ) : null}
       </Button>
+      </span>
       {open ? (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[min(18rem,calc(100vw-1.5rem))] max-h-[min(16rem,45dvh)] overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg">
+        <div
+          className="fixed z-50 max-h-[min(16rem,45dvh)] overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg"
+          style={{ top: box.top, left: box.left, width: box.width }}
+        >
           <p className="border-b border-line px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted">
             {t("notifications")}
           </p>
