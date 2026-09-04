@@ -182,14 +182,20 @@ export const listPublicVendors = createServerFn({ method: "GET" })
       phone: string;
       industry: string;
       is_vendor: boolean | string | number;
-    }>(`select user_id, shop_name, phone, industry, is_vendor from vaani_profiles`);
+      role: string;
+    }>(`select user_id, shop_name, phone, industry, is_vendor, role from vaani_profiles`);
     return rows
       .map((r) => {
         const fromUser = digits(String(r.user_id || "").replace(/^vaani-/, ""));
         const fromPhone = digits(r.phone || "");
         const ten =
           fromUser.length === 10 ? fromUser : fromPhone.length >= 10 ? fromPhone.slice(-10) : fromPhone;
-        const flag = r.is_vendor === true || r.is_vendor === "t" || r.is_vendor === "true" || r.is_vendor === 1;
+        const flag =
+          r.is_vendor === true ||
+          r.is_vendor === "t" ||
+          r.is_vendor === "true" ||
+          r.is_vendor === 1 ||
+          String(r.role || "") === "vendor";
         return {
           ten,
           shopName: (r.shop_name || "").trim(),

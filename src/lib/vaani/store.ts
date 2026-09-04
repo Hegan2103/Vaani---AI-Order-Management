@@ -471,7 +471,7 @@ export function writeShopIdentity(p: ShopIdentity) {
     /* ignore */
   }
 }
-function vendorFromListing(ten: string, shop: string, industry: Industry | "", name?: string): Vendor {
+export function vendorFromListing(ten: string, shop: string, industry: Industry | "", name?: string): Vendor {
   const formatted = formatInPhone(ten);
   const title = shop.trim() || name?.trim() || `Shop ${ten}`;
   return {

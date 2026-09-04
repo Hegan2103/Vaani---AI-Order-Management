@@ -32,7 +32,7 @@ import {
   applyDirContacts,
   bookNameFor,
   listedVendors,
-  forgetListedVendor,
+  vendorFromListing,
   rememberListedVendor,
   rememberListedBuyer,
   readShopIdentity,
@@ -117,15 +117,21 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       void listPublicVendors()
         .then((rows) => {
           if (!Array.isArray(rows) || isSignedOut()) return;
+          const live = [];
           for (const r of rows) {
             if (!r.shopName || r.ten.length !== 10) continue;
-            if (r.isVendor) rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
-            else {
-              forgetListedVendor(r.ten);
+            if (r.isVendor) {
+              rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
+              live.push(vendorFromListing(r.ten, r.shopName, r.industry || ""));
+            } else {
               rememberListedBuyer({ shopName: r.shopName, phone: r.ten });
             }
           }
-          setLiveVendors(listedVendors());
+          const seen = new Set(live.map((v) => v.id));
+          for (const v of listedVendors()) {
+            if (!seen.has(v.id)) live.push(v);
+          }
+          setLiveVendors(live);
         })
         .catch(() => {
           /* local listings */
