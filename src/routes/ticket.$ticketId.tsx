@@ -32,9 +32,12 @@ function TicketPage() {
   const customerName = useVaani((s) => s.customerName);
   const [remoteShop, setRemoteShop] = useState("");
   const [remoteCustomerShop, setRemoteCustomerShop] = useState("");
-  const found = useVaani(
-    (s) => s.tickets.find((t) => t.id === ticketId) ?? s.incoming.find((t) => t.id === ticketId),
-  );
+  const found = useVaani((s) => {
+    const sent = s.tickets.find((row) => row.id === ticketId);
+    const inbox = s.incoming.find((row) => row.id === ticketId);
+    if (sent && inbox) return mergeOneTicket(sent, inbox);
+    return sent ?? inbox;
+  });
   const upsertTicket = useVaani((s) => s.upsertTicket);
   const upsertIncoming = useVaani((s) => s.upsertIncoming);
   const updateLines = useVaani((s) => s.updateLines);
@@ -175,8 +178,8 @@ function TicketPage() {
 
   function persist(next: Ticket) {
     const stamped = { ...next, updatedAt: new Date().toISOString() };
-    if (role === "vendor") upsertIncoming(stamped);
-    else upsertTicket(stamped);
+    upsertIncoming(stamped);
+    upsertTicket(stamped);
     return saveTicket({ data: { ticket: stamped } }).catch(() => ({ ok: false as const }));
   }
 
