@@ -510,8 +510,14 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
         />
         <Button
           className="mt-2 w-full"
-          variant="outline"
-          disabled={phase === "parsing" || phase === "countdown" || phase === "recording"}
+          variant="primary"
+          size="lg"
+          disabled={
+            !transcript.trim() ||
+            phase === "parsing" ||
+            phase === "countdown" ||
+            phase === "recording"
+          }
           onClick={() => void stopAndParse(transcriptRef.current)}
         >
           {t("parseTyped")}
