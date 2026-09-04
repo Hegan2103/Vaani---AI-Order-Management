@@ -194,8 +194,7 @@ export const listPublicVendors = createServerFn({ method: "GET" })
           r.is_vendor === true ||
           r.is_vendor === "t" ||
           r.is_vendor === "true" ||
-          r.is_vendor === 1 ||
-          String(r.role || "") === "vendor";
+          r.is_vendor === 1;
         return {
           ten,
           shopName: (r.shop_name || "").trim(),

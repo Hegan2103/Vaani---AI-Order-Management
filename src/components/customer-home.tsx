@@ -311,10 +311,11 @@ export function CustomerHome() {
           filtered.map((c) => {
           const ten = phoneDigits(c.phone);
           const found = ten.length === 10 ? vendorForPhone(c.phone) : undefined;
-          const buyerOnly = ten.length === 10 && ten !== meTen && isListedBuyer(c.phone);
+          const selling = liveVendors.some((row) => phoneDigits(row.phone) === ten || (row.altPhones ?? []).some((p) => phoneDigits(p) === ten));
+          const buyerOnly = ten.length === 10 && ten !== meTen && !selling && isListedBuyer(c.phone);
           const trade = found?.industry && found.shop && !/^Shop \d{10}$/.test(found.shop) ? found.industry : undefined;
           const v =
-            found && !buyerOnly && ten.length === 10 && ten !== meTen
+            selling && ten.length === 10 && ten !== meTen
               ? {
                   id: found.id || `u-vaani-${ten}`,
                   name: (found.shop || found.name || c.name || "").trim() || `Shop ${ten}`,
