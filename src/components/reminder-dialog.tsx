@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Clock } from "lucide-react";
+import { Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { deleteReminderRemote, listRemindersRemote, saveReminder } from "@/lib/vaani/account";
 import { useT } from "@/lib/vaani/i18n";
@@ -89,6 +89,7 @@ function ReminderForm({
     existing || blankReminder(ownerTen, contactTen, contactName, notifyBoth),
   );
   const [msg, setMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let stop = false;
@@ -136,6 +137,9 @@ function ReminderForm({
   }
 
   async function save() {
+    if (saving) return;
+    setSaving(true);
+    setMsg(null);
     const next = {
       ...row,
       id: crypto.randomUUID(),
@@ -165,9 +169,11 @@ function ReminderForm({
       /* local copy kept */
     }
     setMsg(t("reminderSaved"));
+    setSaving(false);
   }
 
   async function remove() {
+    if (saving) return;
     deleteReminder(row.id);
     try {
       await deleteReminderRemote({ data: { id: row.id } });
@@ -178,11 +184,24 @@ function ReminderForm({
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-end bg-ink/40 p-4 sm:place-items-center" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 grid place-items-end bg-ink/40 p-4 sm:place-items-center"
+      onClick={() => {
+        if (!saving) onClose();
+      }}
+    >
       <div
-        className="w-full max-w-md rounded-[var(--radius-xl)] border border-line bg-surface p-5"
+        className="relative w-full max-w-md rounded-[var(--radius-xl)] border border-line bg-surface p-5"
         onClick={(e) => e.stopPropagation()}
       >
+        {saving ? (
+          <div className="absolute inset-0 z-10 grid place-items-center rounded-[var(--radius-xl)] bg-surface/80">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="size-5 animate-spin" />
+              {t("saving")}
+            </div>
+          </div>
+        ) : null}
         <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("setReminder")}</p>
         <p className="mt-1 font-medium">
           {contactName} · {formatInPhone(contactTen)}
@@ -194,6 +213,7 @@ function ReminderForm({
           className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
           value={row.repeat}
           onChange={(e) => patch({ repeat: e.target.value as ReminderRepeat })}
+          disabled={saving}
         >
           <option value="daily">{t("reminderDaily")}</option>
           <option value="weekly">{t("reminderWeekly")}</option>
@@ -207,6 +227,7 @@ function ReminderForm({
           className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
           value={row.time}
           onChange={(e) => patch({ time: e.target.value })}
+          disabled={saving}
         />
 
         {row.repeat === "weekly" ? (
@@ -216,6 +237,7 @@ function ReminderForm({
               className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
               value={row.weekday}
               onChange={(e) => patch({ weekday: Number(e.target.value) })}
+              disabled={saving}
             >
               {WEEKDAYS.map((d, i) => (
                 <option key={d} value={i}>
@@ -234,6 +256,7 @@ function ReminderForm({
               className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
               value={row.date}
               onChange={(e) => patch({ date: e.target.value })}
+              disabled={saving}
             />
           </>
         ) : null}
@@ -247,6 +270,7 @@ function ReminderForm({
                 className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
                 value={row.from}
                 onChange={(e) => patch({ from: e.target.value })}
+                disabled={saving}
               />
             </div>
             <div>
@@ -256,6 +280,7 @@ function ReminderForm({
                 className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
                 value={row.to}
                 onChange={(e) => patch({ to: e.target.value })}
+                disabled={saving}
               />
             </div>
           </div>
@@ -268,19 +293,27 @@ function ReminderForm({
           value={row.message}
           onChange={(e) => patch({ message: e.target.value })}
           placeholder={t("reminderMessage")}
+          disabled={saving}
         />
 
         {msg ? <p className="mt-2 text-sm text-ok">{msg}</p> : null}
         <div className="mt-4 flex gap-2">
-          <Button type="button" className="flex-1" onClick={() => void save()}>
-            {t("reminderSave")}
+          <Button type="button" className="flex-1" onClick={() => void save()} disabled={saving}>
+            {saving ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin" />
+                {t("saving")}
+              </span>
+            ) : (
+              t("reminderSave")
+            )}
           </Button>
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             {t("cancel")}
           </Button>
         </div>
         {existing ? (
-          <button type="button" className="mt-3 text-xs text-danger" onClick={() => void remove()}>
+          <button type="button" className="mt-3 text-xs text-danger" onClick={() => void remove()} disabled={saving}>
             {t("deleteDraft")}
           </button>
         ) : null}
