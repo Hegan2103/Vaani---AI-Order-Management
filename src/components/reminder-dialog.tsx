@@ -62,10 +62,27 @@ function ReminderForm({
   const { t } = useT();
   const ownerTen = liveLoginTen() || readLoginTen();
   const contactTen = phoneDigits(contactPhone);
+  function formKey() {
+    return `vaani-reminder-form:${ownerTen}:${contactTen}`;
+  }
+  function readFormCache(): Reminder | undefined {
+    if (typeof window === "undefined" || ownerTen.length !== 10 || contactTen.length !== 10) return undefined;
+    try {
+      const raw = localStorage.getItem(formKey());
+      if (!raw) return undefined;
+      const parsed = JSON.parse(raw) as Reminder;
+      if (!parsed || typeof parsed !== "object") return undefined;
+      return parsed;
+    } catch {
+      return undefined;
+    }
+  }
   function latestForPair() {
-    return listReminders()
+    const cached = readFormCache();
+    const listed = listReminders()
       .filter((r) => phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen)
-      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+      .sort((a, b) => String(b.createdAt || b.time || "").localeCompare(String(a.createdAt || a.time || "")));
+    return cached || listed[0];
   }
   const existing = latestForPair();
   const [row, setRow] = useState<Reminder>(
@@ -80,8 +97,19 @@ function ReminderForm({
         if (stop) return;
         const rows = Array.isArray(remote) ? remote : [];
         if (rows.length) mergeReminders(rows as Reminder[]);
-        const hit = latestForPair();
-        if (hit) setRow((cur) => ({ ...cur, ...hit, notifyBoth, contactName, ownerTen, contactTen }));
+        const hit = readFormCache() || latestForPair();
+        if (hit) {
+          setRow({
+            ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
+            ...hit,
+            notifyBoth,
+            contactName,
+            ownerTen,
+            contactTen,
+            time: String(hit.time || "09:00").slice(0, 5),
+            message: String(hit.message || ""),
+          });
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -106,6 +134,11 @@ function ReminderForm({
       bells: {},
     };
     upsertReminder(next);
+    try {
+      localStorage.setItem(formKey(), JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
     try {
       await saveReminder({ data: { reminder: next } });
     } catch {
