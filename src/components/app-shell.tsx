@@ -1,6 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Bell, Phone, Store } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CustomerHome } from "@/components/customer-home";
 import { resetLoginGate, isSignedOut } from "@/components/login-screen";
 import { VendorHome } from "@/components/vendor-home";
@@ -471,10 +472,16 @@ function NoticeBell() {
         ) : null}
       </Button>
       </span>
-      {open ? (
+      {open && typeof document !== "undefined"
+        ? createPortal(
         <div
-          className="fixed z-50 max-h-[min(16rem,45dvh)] overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg"
-          style={{ top: box.top, left: box.left, width: box.width }}
+          className="fixed z-[80] overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg"
+          style={{
+            top: box.top,
+            left: 12,
+            width: "calc(100vw - 24px)",
+            maxHeight: "min(16rem, 45dvh)",
+          }}
         >
           <p className="border-b border-line px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted">
             {t("notifications")}
@@ -507,8 +514,10 @@ function NoticeBell() {
               ))}
             </ul>
           )}
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
