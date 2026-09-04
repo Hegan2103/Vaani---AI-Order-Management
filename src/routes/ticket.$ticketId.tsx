@@ -35,8 +35,10 @@ function TicketPage() {
   const found = useVaani((s) => {
     const sent = s.tickets.find((row) => row.id === ticketId);
     const inbox = s.incoming.find((row) => row.id === ticketId);
-    if (sent && inbox) return mergeOneTicket(sent, inbox);
-    return sent ?? inbox;
+    if (!sent) return inbox;
+    if (!inbox) return sent;
+    const rank: Record<string, number> = { delivered: 6, finalized: 5 };
+    return (rank[inbox.status] ?? 0) >= (rank[sent.status] ?? 0) ? inbox : sent;
   });
   const upsertTicket = useVaani((s) => s.upsertTicket);
   const upsertIncoming = useVaani((s) => s.upsertIncoming);
