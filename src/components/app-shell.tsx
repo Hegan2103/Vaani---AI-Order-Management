@@ -234,10 +234,15 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             : dueRaw && typeof dueRaw === "object" && Array.isArray((dueRaw as { result?: { notices?: unknown } }).result?.notices)
               ? (dueRaw as { result: { notices: { id: string; title: string; body: string; ticketId: string }[] } }).result
               : { notices: [] as { id: string; title: string; body: string; ticketId: string }[] };
-        const inbox = await listInboxNotices({ data: { phone: login } });
+        const inboxRaw = await listInboxNotices({ data: { phone: login } });
+        const inbox = Array.isArray(inboxRaw)
+          ? inboxRaw
+          : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
+            ? ((inboxRaw as { result: typeof dueRes.notices }).result)
+            : [];
         const rows = [
           ...(Array.isArray(dueRes.notices) ? dueRes.notices.map((n) => ({ ...n, at: new Date().toISOString() })) : []),
-          ...(Array.isArray(inbox) ? inbox : []),
+          ...inbox.map((n) => ({ ...n, at: n.at || new Date().toISOString() })),
         ];
         const have = new Set(useVaani.getState().notices.map((n) => n.id));
         const fresh = rows.filter((n) => n.id && !have.has(n.id));
@@ -357,7 +362,7 @@ function NoticeBell() {
   const me = liveLoginTen() || readLoginTen();
   const selling = Boolean(useVaani((s) => s.isVendor) || readShopIdentity(me)?.isVendor);
   const visible = notices.filter((n) => {
-    if (String(n.ticketId || "").startsWith("reminder") || String(n.id || "").startsWith("rem-") || String(n.id || "").startsWith("push-")) return true;
+    if (String(n.ticketId || "").startsWith("reminder") || String(n.id || "").startsWith("rem-") || String(n.id || "").startsWith("push-") || String(n.id || "").startsWith("due-")) return true;
     const ticket = tickets.find((row) => row.id === n.ticketId) || incoming.find((row) => row.id === n.ticketId);
     if (!ticket || me.length !== 10) return false;
     const buyer = phoneDigits(ticket.customerPhone);
