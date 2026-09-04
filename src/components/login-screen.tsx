@@ -192,38 +192,32 @@ export function LoginGate({ children, startOn }: { children: ReactNode; startOn?
       document.documentElement.dir = isRtl(lang) ? "rtl" : "ltr";
       if (useVaani.getState().language !== lang) useVaani.getState().setLanguage(lang);
     }
-    const ten = hasActiveSession() ? liveLoginTen() || readLoginTen() : "";
-    try {
-      if (ten.length === 10) restoreLocalAccount(ten);
-    } catch {
-      /* ignore */
-    }
-    if (isSignedOut()) {
-      setOn(false);
-      const bar = document.getElementById("vaani-cred-bar");
-      if (bar) bar.style.display = "none";
-      return;
-    }
-    if (hasActiveSession() && ten.length === 10) {
-      stickyEntered = true;
-      setOn(true);
-    }
-    const sync = (ev?: Event) => {
+    const sync = () => {
       if (isSignedOut()) {
         setOn(false);
+        const bar = document.getElementById("vaani-cred-bar");
+        if (bar) bar.style.display = "none";
         return;
       }
-      if (ev?.type === "vaani-auth" && hasActiveSession() && (liveLoginTen() || readLoginTen()).length === 10) {
+      const ten = hasActiveSession() ? liveLoginTen() || readLoginTen() : "";
+      try {
+        if (ten.length === 10) restoreLocalAccount(ten);
+      } catch {
+        /* ignore */
+      }
+      if (hasActiveSession() && ten.length === 10) {
+        stickyEntered = true;
         setOn(true);
       }
     };
+    sync();
     window.addEventListener("vaani-auth", sync);
     return () => {
       window.removeEventListener("vaani-auth", sync);
     };
   }, [startOn]);
 
-  if (!on) {
+  if (!on || isSignedOut()) {
     return (
       <LoginScreen
         onEntered={() => {

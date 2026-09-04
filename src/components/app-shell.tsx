@@ -522,6 +522,7 @@ function AccountBar() {
       /* ignore */
     }
     storeBearerToken(null);
+    window.dispatchEvent(new Event("vaani-auth"));
   }
   return (
     <div className="flex items-center gap-2">
