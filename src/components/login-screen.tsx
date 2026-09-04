@@ -1,4 +1,5 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { storeBearerToken, signInGoogle } from "@/lib/auth/client";
 import {
@@ -481,7 +482,7 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
               >
                 {t("sendCode")}
               </button>
-              <p className="mt-5 text-center text-xs text-muted">{t("orContinue")}</p>
+              <p className="mt-5 text-center text-sm font-medium tracking-wide text-muted">OR</p>
               <button
                 type="button"
                 className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-md)] border border-line bg-surface text-base font-medium"
@@ -489,14 +490,20 @@ export function LoginScreen({ onEntered }: { onEntered?: () => void }) {
                 onClick={() => {
                   setBusy(true);
                   setErr(null);
-                  void signInGoogle("/")
-                    .catch((e) => {
-                      setErr(e instanceof Error ? e.message : t("signIn"));
-                    })
-                    .finally(() => setBusy(false));
+                  void signInGoogle("/").catch((e) => {
+                    setErr(e instanceof Error ? e.message : t("signIn"));
+                    setBusy(false);
+                  });
                 }}
               >
-                {t("continueWith", { name: "Google" })}
+                {busy ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="size-4 animate-spin" />
+                    {t("pleaseWait")}
+                  </span>
+                ) : (
+                  t("continueWith", { name: "Google" })
+                )}
               </button>
             </>
           ) : (
