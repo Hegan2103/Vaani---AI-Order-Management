@@ -1,20 +1,17 @@
 import { useState } from "react";
 import { Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { deleteReminderRemote, fireReminderPush, saveReminder } from "@/lib/vaani/account";
+import { deleteReminderRemote, saveReminder } from "@/lib/vaani/account";
 import { useT } from "@/lib/vaani/i18n";
 import {
   WEEKDAYS,
   blankReminder,
   deleteReminder,
   listReminders,
-  reminderTargets,
   upsertReminder,
 } from "@/lib/vaani/reminders";
 import { formatInPhone, phoneDigits } from "@/lib/vaani/seed";
-import { liveLoginTen, readLoginTen, useVaani } from "@/lib/vaani/store";
-import { playBeep } from "@/lib/vaani/notify";
-import { showLocalPopup } from "@/lib/vaani/push-client";
+import { liveLoginTen, readLoginTen } from "@/lib/vaani/store";
 import type { Reminder, ReminderRepeat } from "@/lib/vaani/types";
 
 export function ReminderButton({
@@ -90,43 +87,6 @@ function ReminderForm({
       await saveReminder({ data: { reminder: next } });
     } catch {
       /* local copy kept */
-    }
-    const [hh, mm] = String(next.time || "09:00").split(":").map((n) => Number(n));
-    const when = new Date();
-    when.setHours(hh || 0, mm || 0, 0, 0);
-    const wait = when.getTime() - Date.now();
-    if (wait > 2000) {
-      window.setTimeout(() => {
-        const stamp = new Date().toISOString().slice(0, 10);
-        const fired = { ...next, lastFired: stamp };
-        upsertReminder(fired);
-        void saveReminder({ data: { reminder: fired } }).catch(() => undefined);
-        const phones = reminderTargets(fired);
-        if (phones.length) {
-          void fireReminderPush({
-            data: {
-              phones,
-              title: contactName || "Reminder",
-              body: fired.message || contactName || "Reminder",
-            },
-          }).catch(() => undefined);
-        }
-        const label = contactName || "Reminder";
-        const body = fired.message || label;
-        useVaani.getState().pushNotices([
-          {
-            id: crypto.randomUUID(),
-            at: new Date().toISOString(),
-            title: label,
-            body,
-            ticketId: `reminder:${fired.id}`,
-            read: false,
-            audience: "vendor",
-          },
-        ]);
-        void showLocalPopup(label, body);
-        playBeep();
-      }, wait);
     }
     setMsg(t("reminderSaved"));
   }

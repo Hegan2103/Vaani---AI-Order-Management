@@ -253,65 +253,6 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       } catch {
         /* server due optional */
       }
-      const whoNow = liveLoginTen() || readLoginTen() || me;
-      const due = listReminders().filter((r) => isReminderDue(r) && phoneDigits(r.ownerTen) === whoNow);
-      for (const r of due) {
-        const stamp = new Date().toISOString().slice(0, 10);
-        markFired(r.id);
-        const next = { ...r, lastFired: stamp, bells: r.bells || {} };
-        upsertReminder(next);
-        try {
-          await saveReminder({ data: { reminder: next } });
-        } catch {
-          /* local */
-        }
-        const others = reminderTargets(r);
-        if (others.length) {
-          try {
-            await fireReminderPush({
-              data: { phones: others, title: r.contactName || "Reminder", body: r.message || r.contactName },
-            });
-          } catch {
-            /* in-app still */
-          }
-        }
-      }
-      const who = liveLoginTen() || readLoginTen() || me;
-      for (const r of listReminders().filter((row) => reminderNeedsBell(row, who))) {
-        const seenKey = `vaani-rem-notice:${r.id}:${who}`;
-        try {
-          if (sessionStorage.getItem(seenKey) === "1") continue;
-          sessionStorage.setItem(seenKey, "1");
-        } catch {
-          /* continue */
-        }
-        markBellSeen(r.id, who);
-        const bells = { ...(r.bells || {}), [who]: new Date().toISOString().slice(0, 10) };
-        const next = { ...r, bells };
-        upsertReminder(next);
-        try {
-          await saveReminder({ data: { reminder: next } });
-        } catch {
-          /* local */
-        }
-        const owner = phoneDigits(r.ownerTen);
-        const contact = phoneDigits(r.contactTen);
-        const other = who === owner ? contact : owner;
-        const label = bookNameFor(other, r.contactName) || r.contactName || "Reminder";
-        pushNotices([
-          {
-            id: crypto.randomUUID(),
-            at: new Date().toISOString(),
-            title: label,
-            body: r.message || label,
-            ticketId: `reminder:${r.id}`,
-            read: false,
-            audience: useVaani.getState().role,
-          },
-        ]);
-        void showLocalPopup(label, r.message || label);
-        playBeep();
-      }
     }
     void tick();
     const id = window.setInterval(() => void tick(), 3000);

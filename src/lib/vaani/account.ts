@@ -67,6 +67,7 @@ async function ensureVaaniSchema(sql: Sql) {
     )
   `);
   await sql.query(`alter table vaani_reminders add column if not exists notify_both boolean not null default false`);
+  await sql.query(`alter table vaani_reminders add column if not exists fired_stamp text not null default ''`);
   await sql.query(`
     create table if not exists vaani_inbox (
       id text primary key,
@@ -1045,7 +1046,13 @@ export const processDueReminders = createServerFn({ method: "POST" })
       };
       if (!reminderIsDue(reminder)) continue;
       const next = { ...raw, ...reminder, lastFired: stamp };
-      await sql.query(`update vaani_reminders set payload = $2::jsonb where id = $1`, [row.id, JSON.stringify(next)]);
+      const claimed = await sql.query<{ id: string }>(
+        `update vaani_reminders set payload = $2::jsonb, fired_stamp = $3
+         where id = $1 and fired_stamp is distinct from $3
+         returning id`,
+        [row.id, JSON.stringify(next), stamp],
+      );
+      if (!claimed.length) continue;
       const phones = reminder.notifyBoth
         ? [reminder.ownerTen, reminder.contactTen].filter((p) => p.length === 10)
         : [reminder.ownerTen].filter((p) => p.length === 10);
@@ -1072,15 +1079,5 @@ export const fireReminderPush = createServerFn({ method: "POST" })
     const { sendPushToPhones } = await import("./push-server");
     const phones = data.phones.map((p) => digits(p)).filter((p) => p.length === 10);
     await sendPushToPhones(phones, data.title, data.body, "/");
-    const sql = await getSql();
-    await ensureVaaniSchema(sql);
-    for (const phone of phones) {
-      const nid = `push-${phone}-${Date.now()}`;
-      await sql.query(
-        `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)
-         on conflict (id) do nothing`,
-        [nid, phone, data.title || "Reminder", data.body || data.title || "Reminder", "reminder:push"],
-      );
-    }
     return { ok: true as const };
   });
