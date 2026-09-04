@@ -455,7 +455,7 @@ function NoticeBell() {
         ) : null}
       </Button>
       {open ? (
-        <div className="fixed left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top)+4.25rem)] z-30 max-h-[min(20rem,calc(100dvh-7rem))] overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-h-80">
+        <div className="absolute right-0 top-full z-50 mt-2 w-[min(18rem,calc(100vw-1.5rem))] max-h-[min(16rem,45dvh)] overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-lg">
           <p className="border-b border-line px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted">
             {t("notifications")}
           </p>
