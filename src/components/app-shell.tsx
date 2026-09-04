@@ -243,28 +243,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       );
       try {
         const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-        const dueRes = await processDueReminders({ data: { phone: login, book: readBookNames() } });
-        const duePack =
-          dueRes && typeof dueRes === "object" && Array.isArray((dueRes as { notices?: unknown }).notices)
-            ? (dueRes as { notices: Array<{ id: string; title: string; body: string; ticketId: string }> })
-            : dueRes && typeof dueRes === "object" && Array.isArray((dueRes as { result?: { notices?: unknown } }).result?.notices)
-              ? ((dueRes as { result: { notices: Array<{ id: string; title: string; body: string; ticketId: string }> } }).result)
-              : { notices: [] as Array<{ id: string; title: string; body: string; ticketId: string }> };
-        for (const n of duePack.notices) {
-          if (!String(n.id || "").startsWith("due-")) continue;
-          if (useVaani.getState().notices.some((row) => row.id === n.id)) continue;
-          pushNotices([
-            {
-              id: n.id,
-              at: new Date().toISOString(),
-              title: n.title,
-              body: n.body,
-              ticketId: n.ticketId,
-              read: false,
-              audience: useVaani.getState().role,
-            },
-          ]);
-        }
+        await processDueReminders({ data: { phone: login, book: readBookNames() } });
         const again = await listRemindersRemote({ data: { phone: login } });
         const againRows = Array.isArray(again)
           ? again
