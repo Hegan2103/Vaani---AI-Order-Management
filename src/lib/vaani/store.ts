@@ -937,7 +937,7 @@ export const useVaani = create<State>()(
         const phone = p.phone.trim() || s.customerPhone;
         const language = p.language || s.language || readUiLanguage() || "en-IN";
         const industry = p.industry || s.industry || "";
-        const isVendor = Boolean(p.isVendor || s.isVendor);
+        const isVendor = Boolean(p.isVendor);
         if (
           s.customerName === shopName &&
           s.customerPhone === phone &&
@@ -951,6 +951,7 @@ export const useVaani = create<State>()(
         if (!shopName) return;
         writeShopIdentity({ shopName, phone, industry, isVendor, language });
         if (isVendor) rememberListedVendor({ shopName, phone, industry });
+        else forgetListedVendor(phoneDigits(phone));
         set({
           customerName: shopName,
           customerPhone: phone,

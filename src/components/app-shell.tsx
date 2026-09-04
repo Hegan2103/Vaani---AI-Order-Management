@@ -70,7 +70,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   const setAccountReady = useVaani((s) => s.setAccountReady);
   const callVendorId = useVaani((s) => s.callVendorId);
   const setCallVendorId = useVaani((s) => s.setCallVendorId);
-  const selling = Boolean(useVaani((s) => s.isVendor) || readShopIdentity(liveLoginTen() || readLoginTen())?.isVendor);
+  const selling = Boolean(readShopIdentity(liveLoginTen() || readLoginTen())?.isVendor ?? useVaani((s) => s.isVendor));
   const hydrated = useVaani((s) => s.hydrated);
   const accountReady = useVaani((s) => s.accountReady);
   const navigate = useNavigate();
@@ -400,7 +400,7 @@ function NoticeBell() {
   const btnRef = useRef<HTMLSpanElement>(null);
   const [box, setBox] = useState({ top: 0, left: 12, width: 288 });
   const me = liveLoginTen() || readLoginTen();
-  const selling = Boolean(useVaani((s) => s.isVendor) || readShopIdentity(me)?.isVendor);
+  const selling = Boolean(readShopIdentity(me)?.isVendor ?? useVaani((s) => s.isVendor));
   const visible = notices.filter((n) => {
     if (String(n.ticketId || "").startsWith("reminder") || String(n.id || "").startsWith("rem-") || String(n.id || "").startsWith("push-") || String(n.id || "").startsWith("due-")) return true;
     const ticket = tickets.find((row) => row.id === n.ticketId) || incoming.find((row) => row.id === n.ticketId);
