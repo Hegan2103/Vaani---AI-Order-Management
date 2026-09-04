@@ -70,13 +70,12 @@ export function diffTicketEvents(prev: Ticket[], next: Ticket[]): VaaniEvent[] {
       } else if (line.status === "confirmed") {
         events.push(ev("Price accepted", `${line.productName} · ₹${line.quotedPrice ?? "—"}`, t.id, "vendor"));
       } else if (line.status === "rejected") {
-        const toCustomer = before.status === "pending" || before.status === "quoted";
         events.push(
           ev(
             `${line.productName} rejected`,
             line.rejectReason || "Not accepted",
             t.id,
-            toCustomer && before.status === "pending" ? "customer" : before.status === "quoted" ? "customer" : "vendor",
+            before.status === "quoted" ? "vendor" : "customer",
           ),
         );
       }

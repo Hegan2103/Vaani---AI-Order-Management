@@ -721,12 +721,17 @@ export const saveTicket = createServerFn({ method: "POST" })
     }
     try {
       const { sendPushToPhones } = await import("./push-server");
-      const saver = digits(context.userId.replace(/^vaani-/, ""));
+      const saver = digits(String(context.userId || "").replace(/^vaani-/, ""));
       const buyer = digits(t.customerPhone);
       const targets: string[] = [];
       if (t.status !== "draft") {
-        if (saver && saver === buyer && vendorTen && vendorTen !== saver) targets.push(vendorTen);
-        else if (saver && saver === vendorTen && buyer && buyer !== saver) targets.push(buyer);
+        if (saver && saver === vendorTen && buyer && buyer !== saver) targets.push(buyer);
+        else if (saver && saver === buyer && vendorTen && vendorTen !== saver) targets.push(vendorTen);
+        else if (t.lines.some((l) => l.status !== "pending")) {
+          if (buyer && buyer !== vendorTen) targets.push(buyer);
+        } else if (vendorTen && vendorTen !== buyer) {
+          targets.push(vendorTen);
+        }
       }
       const title =
         t.status === "finalized"
