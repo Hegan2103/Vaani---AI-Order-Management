@@ -12,7 +12,9 @@ import {
   upsertReminder,
 } from "@/lib/vaani/reminders";
 import { formatInPhone, phoneDigits } from "@/lib/vaani/seed";
-import { liveLoginTen, readLoginTen } from "@/lib/vaani/store";
+import { liveLoginTen, readLoginTen, useVaani } from "@/lib/vaani/store";
+import { playBeep } from "@/lib/vaani/notify";
+import { showLocalPopup } from "@/lib/vaani/push-client";
 import type { Reminder, ReminderRepeat } from "@/lib/vaani/types";
 
 export function ReminderButton({
@@ -109,6 +111,21 @@ function ReminderForm({
             },
           }).catch(() => undefined);
         }
+        const label = contactName || "Reminder";
+        const body = fired.message || label;
+        useVaani.getState().pushNotices([
+          {
+            id: crypto.randomUUID(),
+            at: new Date().toISOString(),
+            title: label,
+            body,
+            ticketId: `reminder:${fired.id}`,
+            read: false,
+            audience: "vendor",
+          },
+        ]);
+        void showLocalPopup(label, body);
+        playBeep();
       }, wait);
     }
     setMsg(t("reminderSaved"));
