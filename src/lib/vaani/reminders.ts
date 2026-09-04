@@ -97,10 +97,14 @@ export function reminderTargets(row: Reminder): string[] {
 
 export function reminderNeedsBell(row: Reminder, me: string): boolean {
   const ten = phoneDigits(me);
-  if (ten.length !== 10 || !reminderTargets(row).includes(ten)) return false;
+  if (ten.length !== 10) return false;
+  const owner = phoneDigits(row.ownerTen);
+  const contact = phoneDigits(row.contactTen);
   const today = todayStamp();
-  if ((row.lastFired || "") !== today) return false;
-  return (row.bells || {})[ten] !== today;
+  if ((row.bells || {})[ten] === today) return false;
+  if (row.notifyBoth && contact === ten && owner !== ten) return true;
+  if (!reminderTargets(row).includes(ten)) return false;
+  return (row.lastFired || "") === today;
 }
 
 export function markBellSeen(id: string, ten: string) {
