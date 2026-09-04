@@ -31,6 +31,7 @@ function TicketPage() {
   const liveVendors = useVaani((s) => s.liveVendors);
   const customerName = useVaani((s) => s.customerName);
   const [remoteShop, setRemoteShop] = useState("");
+  const [remoteCustomerShop, setRemoteCustomerShop] = useState("");
   const found = useVaani(
     (s) => s.tickets.find((t) => t.id === ticketId) ?? s.incoming.find((t) => t.id === ticketId),
   );
@@ -76,6 +77,21 @@ function TicketPage() {
   }, [ticketId, role, upsertTicket, upsertIncoming]);
 
   useEffect(() => {
+    if (role === "vendor") {
+      const ten = phoneDigits(found?.customerPhone || "");
+      if (ten.length !== 10) return;
+      let alive = true;
+      void lookupVendorByPhone({ data: { phone: ten } })
+        .then((row) => {
+          if (alive && row?.shopName) setRemoteCustomerShop(row.shopName);
+        })
+        .catch(() => {
+          /* ticket.customerName still used */
+        });
+      return () => {
+        alive = false;
+      };
+    }
     const ten = phoneDigits(found?.vendorPhone || "");
     if (ten.length !== 10 || role === "vendor") return;
     let alive = true;
@@ -221,7 +237,11 @@ function TicketPage() {
         <div>
           <h1 className="font-display text-3xl tracking-tight md:text-4xl">
             {role === "vendor"
-              ? shopNameForTen(ticket.customerPhone, ticket.customerName || t("customer"))
+              ? (clean(remoteCustomerShop) ||
+                  clean((ticket.customerName || "").trim()) ||
+                  (remoteCustomerShop && remoteCustomerShop !== mine ? remoteCustomerShop : "") ||
+                  ((ticket.customerName || "").trim() !== mine ? (ticket.customerName || "").trim() : "") ||
+                  `Shop ${phoneDigits(ticket.customerPhone)}`)
               : customerVendorTitle}
           </h1>
           <p className="text-sm text-muted">
