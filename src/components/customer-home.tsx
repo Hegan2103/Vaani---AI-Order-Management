@@ -311,9 +311,10 @@ export function CustomerHome() {
           filtered.map((c) => {
           const ten = phoneDigits(c.phone);
           const found = ten.length === 10 ? vendorForPhone(c.phone) : undefined;
+          const buyerOnly = ten.length === 10 && ten !== meTen && isListedBuyer(c.phone);
           const trade = found?.industry && found.shop && !/^Shop \d{10}$/.test(found.shop) ? found.industry : undefined;
           const v =
-            found && ten.length === 10 && ten !== meTen
+            found && !buyerOnly && ten.length === 10 && ten !== meTen
               ? {
                   id: found.id || `u-vaani-${ten}`,
                   name: (found.shop || found.name || c.name || "").trim() || `Shop ${ten}`,
@@ -325,7 +326,6 @@ export function CustomerHome() {
                   altPhones: [ten],
                 }
               : undefined;
-          const buyerOnly = !v && ten.length === 10 && ten !== meTen && isListedBuyer(c.phone);
           return (
             <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">

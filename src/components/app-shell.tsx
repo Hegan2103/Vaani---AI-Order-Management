@@ -35,6 +35,7 @@ import {
   vendorFromListing,
   rememberListedVendor,
   rememberListedBuyer,
+  forgetListedVendor,
   readShopIdentity,
   tenFromEmail,
   useVaani,
@@ -124,12 +125,9 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
               rememberListedVendor({ shopName: r.shopName, phone: r.ten, industry: r.industry || "" });
               live.push(vendorFromListing(r.ten, r.shopName, r.industry || ""));
             } else {
+              forgetListedVendor(r.ten);
               rememberListedBuyer({ shopName: r.shopName, phone: r.ten });
             }
-          }
-          const seen = new Set(live.map((v) => v.id));
-          for (const v of listedVendors()) {
-            if (!seen.has(v.id)) live.push(v);
           }
           setLiveVendors(live);
         })
