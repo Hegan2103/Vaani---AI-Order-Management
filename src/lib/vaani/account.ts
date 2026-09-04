@@ -993,5 +993,15 @@ export const fireReminderPush = createServerFn({ method: "POST" })
     const { sendPushToPhones } = await import("./push-server");
     const phones = data.phones.map((p) => digits(p)).filter((p) => p.length === 10);
     await sendPushToPhones(phones, data.title, data.body, "/");
+    const sql = await getSql();
+    await ensureVaaniSchema(sql);
+    for (const phone of phones) {
+      const nid = `push-${phone}-${Date.now()}`;
+      await sql.query(
+        `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)
+         on conflict (id) do nothing`,
+        [nid, phone, data.title || "Reminder", data.body || data.title || "Reminder", "reminder:push"],
+      );
+    }
     return { ok: true as const };
   });

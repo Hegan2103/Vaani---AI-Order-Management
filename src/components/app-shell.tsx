@@ -222,19 +222,16 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             ? ((remoteRaw as { result: Reminder[] }).result)
             : [];
         if (remote.length) mergeReminders(remote as Reminder[]);
+      } catch {
+        /* local reminders */
+      }
+      try {
+        const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
         const inbox = await listInboxNotices({ data: { phone: login } });
         if (stop || isSignedOut()) return;
         const inboxRows = Array.isArray(inbox) ? inbox : [];
-        const fresh = inboxRows.filter((n) => {
-          const key = `vaani-inbox-seen:${n.id}`;
-          try {
-            if (sessionStorage.getItem(key) === "1") return false;
-            sessionStorage.setItem(key, "1");
-          } catch {
-            return true;
-          }
-          return true;
-        });
+        const have = new Set(useVaani.getState().notices.map((n) => n.id));
+        const fresh = inboxRows.filter((n) => n.id && !have.has(n.id));
         if (fresh.length) {
           pushNotices(
             fresh.map((n) => ({
@@ -242,7 +239,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
               at: n.at || new Date().toISOString(),
               title: n.title || "Reminder",
               body: n.body || n.title || "Reminder",
-              ticketId: n.ticketId || `reminder:${n.id}`,
+              ticketId: String(n.ticketId || "").startsWith("reminder") ? n.ticketId : `reminder:${n.id}`,
               read: false,
               audience: "customer" as const,
             })),
@@ -250,7 +247,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
           playBeep();
         }
       } catch {
-        /* local reminders */
+        /* inbox optional */
       }
       const due = listReminders().filter((r) => isReminderDue(r));
       for (const r of due) {
@@ -312,7 +309,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       }
     }
     void tick();
-    const id = window.setInterval(() => void tick(), 8000);
+    const id = window.setInterval(() => void tick(), 3000);
     return () => {
       stop = true;
       window.clearInterval(id);
@@ -409,7 +406,7 @@ function NoticeBell() {
   const me = liveLoginTen() || readLoginTen();
   const selling = Boolean(useVaani((s) => s.isVendor) || readShopIdentity(me)?.isVendor);
   const visible = notices.filter((n) => {
-    if (String(n.ticketId || "").startsWith("reminder:")) return true;
+    if (String(n.ticketId || "").startsWith("reminder") || String(n.id || "").startsWith("rem-") || String(n.id || "").startsWith("push-")) return true;
     const ticket = tickets.find((row) => row.id === n.ticketId) || incoming.find((row) => row.id === n.ticketId);
     if (!ticket || me.length !== 10) return false;
     const buyer = phoneDigits(ticket.customerPhone);
