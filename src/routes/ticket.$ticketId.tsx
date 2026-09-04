@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { getTicket, lookupVendorByPhone, saveTicket } from "@/lib/vaani/account";
+import { getTicket, listPublicVendors, lookupVendorByPhone, saveTicket } from "@/lib/vaani/account";
 import { composeOrderCopy } from "@/lib/vaani/ai";
 import { useT } from "@/lib/vaani/i18n";
 import { shopNameForTen, listedVendors, mergeOneTicket, useVaani, vendorById, vendorForPhone } from "@/lib/vaani/store";
@@ -79,14 +79,24 @@ function TicketPage() {
     const ten = phoneDigits(found?.vendorPhone || "");
     if (ten.length !== 10 || role === "vendor") return;
     let alive = true;
-    void lookupVendorByPhone({ data: { phone: ten } })
-      .then((row) => {
-        if (!alive || !row?.shopName) return;
-        setRemoteShop(row.shopName);
-      })
-      .catch(() => {
+    void (async () => {
+      try {
+        const row = await lookupVendorByPhone({ data: { phone: ten } });
+        if (alive && row?.shopName) {
+          setRemoteShop(row.shopName);
+          return;
+        }
+      } catch {
+        /* try public list */
+      }
+      try {
+        const rows = await listPublicVendors();
+        const hit = rows.find((r) => r.ten === ten && r.shopName);
+        if (alive && hit?.shopName) setRemoteShop(hit.shopName);
+      } catch {
         /* listed shop still used */
-      });
+      }
+    })();
     return () => {
       alive = false;
     };
@@ -136,7 +146,10 @@ function TicketPage() {
     (stampedShop && stampedShop !== mine ? stampedShop : "") ||
     (listedShop && listedShop !== mine ? listedShop : "") ||
     (pinShop && pinShop !== mine ? pinShop : "") ||
-    t("vendor");
+    remoteShop ||
+    stampedShop ||
+    listedShop ||
+    (vendorTen ? `Shop ${vendorTen}` : t("vendor"));
   const pending = ticket.lines.some((l) => l.status === "pending");
   const waitingOnPrice = ticket.lines.some((l) => l.status === "quoted");
   const vendorReady =

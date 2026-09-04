@@ -1263,6 +1263,9 @@ export function mergeOneTicket(local: Ticket | undefined, remote: Ticket): Ticke
   const base = preferRemote ? { ...local, ...remote } : { ...remote, ...local };
   return {
     ...base,
+    vendorShop: (local.vendorShop || "").trim() || (remote.vendorShop || "").trim() || base.vendorShop,
+    vendorPhone: local.vendorPhone || remote.vendorPhone || base.vendorPhone,
+    customerName: (local.customerName || "").trim() || (remote.customerName || "").trim() || base.customerName,
     lines: mergeLines(local.lines, remote.lines, remoteTs > localTs),
     orderCopy: local.orderCopy || remote.orderCopy,
     status: preferRemote ? remote.status : local.status,
