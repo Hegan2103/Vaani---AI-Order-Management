@@ -227,15 +227,20 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       }
       try {
         const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-        await processDueReminders({ data: { phone: login } });
+        const dueRaw = await processDueReminders({ data: { phone: login } });
+        const dueRes =
+          dueRaw && typeof dueRaw === "object" && "notices" in (dueRaw as object)
+            ? (dueRaw as { notices?: { id: string; title: string; body: string; ticketId: string }[] })
+            : dueRaw && typeof dueRaw === "object" && Array.isArray((dueRaw as { result?: { notices?: unknown } }).result?.notices)
+              ? (dueRaw as { result: { notices: { id: string; title: string; body: string; ticketId: string }[] } }).result
+              : { notices: [] as { id: string; title: string; body: string; ticketId: string }[] };
         const inbox = await listInboxNotices({ data: { phone: login } });
-        const rows = Array.isArray(inbox) ? inbox : [];
+        const rows = [
+          ...(Array.isArray(dueRes.notices) ? dueRes.notices.map((n) => ({ ...n, at: new Date().toISOString() })) : []),
+          ...(Array.isArray(inbox) ? inbox : []),
+        ];
         const have = new Set(useVaani.getState().notices.map((n) => n.id));
-        const fresh = rows.filter((n) => {
-          if (!n.id || have.has(n.id)) return false;
-          const at = Date.parse(String(n.at || ""));
-          return Number.isFinite(at) && Date.now() - at <= 90 * 1000;
-        });
+        const fresh = rows.filter((n) => n.id && !have.has(n.id));
         if (fresh.length) {
           pushNotices(
             fresh.map((n) => ({

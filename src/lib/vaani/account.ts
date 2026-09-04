@@ -970,7 +970,7 @@ export const listInboxNotices = createServerFn({ method: "POST" })
       title: row.title,
       body: row.body,
       ticketId: row.ticket_id || `reminder:${row.id}`,
-      at: row.created_at,
+      at: new Date(row.created_at).toISOString(),
     }));
   });
 
@@ -1020,6 +1020,7 @@ export const processDueReminders = createServerFn({ method: "POST" })
     );
     const { sendPushToPhones } = await import("./push-server");
     let fired = 0;
+    const notices: { id: string; title: string; body: string; ticketId: string }[] = [];
     const stamp = kolkataNow().stamp;
     for (const row of rows) {
       let raw: Record<string, unknown> = {};
@@ -1066,10 +1067,11 @@ export const processDueReminders = createServerFn({ method: "POST" })
            on conflict (id) do nothing`,
           [nid, phone, title, body, `reminder:${row.id}`],
         );
+        if (phone === ten) notices.push({ id: nid, title, body, ticketId: `reminder:${row.id}` });
       }
       fired += 1;
     }
-    return { fired };
+    return { fired, notices };
   });
 
 export const fireReminderPush = createServerFn({ method: "POST" })
