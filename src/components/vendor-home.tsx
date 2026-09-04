@@ -14,7 +14,7 @@ import {
 import { ShopCard } from "@/components/shop-card";
 import { ReminderButton } from "@/components/reminder-dialog";
 import { useT } from "@/lib/vaani/i18n";
-import { applyDirContacts, bookNameFor, directoryRows, mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
+import { applyDirContacts, bookNameFor, directoryRows, isListedBuyer, mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
   const incoming = useVaani((s) => s.incoming);
@@ -23,6 +23,7 @@ export function VendorHome() {
   const industry = useVaani((s) => s.industry);
   const isVendor = useVaani((s) => s.isVendor);
   const contacts = useVaani((s) => s.contacts);
+  const liveVendors = useVaani((s) => s.liveVendors);
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 
@@ -84,13 +85,22 @@ export function VendorHome() {
           <ul className="divide-y divide-line rounded-[var(--radius-xl)] border border-line bg-surface">
             {bookRows.map((c) => {
               const label = bookNameFor(c.phone, c.name);
+              const rowTen = phoneDigits(c.phone);
+              const selling = liveVendors.some(
+                (row) => phoneDigits(row.phone) === rowTen || (row.altPhones ?? []).some((p) => phoneDigits(p) === rowTen),
+              );
+              const onVaani = rowTen.length === 10 && rowTen !== ten && (selling || isListedBuyer(c.phone));
               return (
                 <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{label}</p>
                     <p className="truncate text-xs text-muted">{formatInPhone(phoneDigits(c.phone))}</p>
                   </div>
-                  <ReminderButton contactName={label} contactPhone={c.phone} notifyBoth />
+                  {onVaani ? (
+                    <ReminderButton contactName={label} contactPhone={c.phone} notifyBoth />
+                  ) : (
+                    <span className="text-xs text-subtle">{t("notOnVaani")}</span>
+                  )}
                 </li>
               );
             })}

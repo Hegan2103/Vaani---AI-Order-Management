@@ -339,7 +339,7 @@ export function CustomerHome() {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-              {ten.length === 10 && ten !== meTen ? (
+              {ten.length === 10 && ten !== meTen && (v || buyerOnly) ? (
                 <ReminderButton contactName={c.name} contactPhone={c.phone} notifyBoth={false} />
               ) : null}
               {ten === meTen ? (
