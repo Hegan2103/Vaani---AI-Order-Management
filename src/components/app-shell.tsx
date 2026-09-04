@@ -231,7 +231,26 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         if (stop || isSignedOut()) return;
         const inboxRows = Array.isArray(inbox) ? inbox : [];
         const have = new Set(useVaani.getState().notices.map((n) => n.id));
-        const fresh = inboxRows.filter((n) => n.id && !have.has(n.id));
+        let seen: string[] = [];
+        try {
+          seen = JSON.parse(localStorage.getItem("vaani-inbox-seen") || "[]") as string[];
+        } catch {
+          seen = [];
+        }
+        const seenSet = new Set(seen);
+        const fresh = inboxRows.filter((n) => {
+          if (!n.id || have.has(n.id) || seenSet.has(n.id)) return false;
+          const at = Date.parse(String(n.at || "")) || 0;
+          if (at && Date.now() - at > 2 * 60 * 1000) return false;
+          return true;
+        });
+        if (fresh.length) {
+          try {
+            localStorage.setItem("vaani-inbox-seen", JSON.stringify([...seenSet, ...fresh.map((n) => n.id)].slice(-80)));
+          } catch {
+            /* ignore */
+          }
+        }
         if (fresh.length) {
           pushNotices(
             fresh.map((n) => ({
@@ -249,7 +268,8 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       } catch {
         /* inbox optional */
       }
-      const due = listReminders().filter((r) => isReminderDue(r));
+      const whoNow = liveLoginTen() || readLoginTen() || me;
+      const due = listReminders().filter((r) => isReminderDue(r) && phoneDigits(r.ownerTen) === whoNow);
       for (const r of due) {
         const stamp = new Date().toISOString().slice(0, 10);
         markFired(r.id);

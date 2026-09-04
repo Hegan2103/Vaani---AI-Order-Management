@@ -961,7 +961,7 @@ export const listInboxNotices = createServerFn({ method: "POST" })
       ticket_id: string;
       created_at: string;
     }>(
-      `select id, title, body, ticket_id, created_at from vaani_inbox where phone = $1 order by created_at desc limit 40`,
+      `select id, title, body, ticket_id, created_at from vaani_inbox where phone = $1 and created_at > now() - interval '20 minutes' order by created_at desc limit 40`,
       [ten],
     );
     return rows.map((row) => ({
