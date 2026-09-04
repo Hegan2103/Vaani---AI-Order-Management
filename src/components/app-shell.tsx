@@ -291,6 +291,37 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       } catch {
         /* server due optional */
       }
+      try {
+        const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
+        const owned = listReminders().some((r) => phoneDigits(r.ownerTen) === login);
+        const isCustomerSide = !owned || useVaani.getState().role === "customer";
+        if (isCustomerSide) {
+          const inboxRaw = await listInboxNotices({ data: { phone: login } });
+          const inboxRows = Array.isArray(inboxRaw)
+            ? inboxRaw
+            : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
+              ? ((inboxRaw as { result: { id: string; title?: string; body?: string; ticketId?: string; at?: string }[] }).result)
+              : [];
+          const have = new Set(useVaani.getState().notices.map((n) => n.id));
+          const fresh = inboxRows.filter((n) => n.id && !have.has(n.id));
+          if (fresh.length) {
+            pushNotices(
+              fresh.map((n) => ({
+                id: n.id,
+                at: n.at || new Date().toISOString(),
+                title: n.title || "Reminder",
+                body: n.body || n.title || "Reminder",
+                ticketId: String(n.ticketId || "").startsWith("reminder") ? n.ticketId : `reminder:${n.id}`,
+                read: false,
+                audience: "customer" as const,
+              })),
+            );
+            playBeep();
+          }
+        }
+      } catch {
+        /* customer inbox only */
+      }
     }
     void tick();
     const id = window.setInterval(() => void tick(), 3000);
