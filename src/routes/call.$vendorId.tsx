@@ -284,6 +284,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
     const listed = vendorTen.length === 10 ? vendorForPhone(vendorTen) : undefined;
     const vendorId = vendorTen.length === 10 ? inboxIdForUser(`vaani-${vendorTen}`) : vendor.id;
     const orderPhone = formatInPhone(loginTen || customerPhone);
+    const meTen = phoneDigits(orderPhone);
     let vendorShop = (listed?.shop || "").trim();
     try {
       const remote = vendorTen.length === 10 ? await lookupVendorByPhone({ data: { phone: vendorTen } }) : null;
@@ -308,15 +309,16 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
     const vendorPhone = formatInPhone(vendorTen || vendor.phone);
     const tickets = useVaani.getState().tickets;
     const draft =
-      tickets.find((t) => t.id === draftIdRef.current && t.status === "draft") ||
-      tickets.find((t) => t.vendorId === vendor.id && t.status === "draft") ||
-      tickets.find((t) => t.vendorId === vendorId && t.status === "draft");
+      tickets.find((t) => t.id === draftIdRef.current && t.status === "draft" && (!meTen || phoneDigits(t.customerPhone) === meTen)) ||
+      tickets.find((t) => t.vendorId === vendor.id && t.status === "draft" && (!meTen || phoneDigits(t.customerPhone) === meTen)) ||
+      tickets.find((t) => t.vendorId === vendorId && t.status === "draft" && (!meTen || phoneDigits(t.customerPhone) === meTen));
     const openSent = tickets.find(
       (t) =>
         (t.vendorId === vendor.id || t.vendorId === vendorId) &&
         t.status !== "draft" &&
         t.status !== "finalized" &&
-        t.status !== "delivered",
+        t.status !== "delivered" &&
+        (!meTen || phoneDigits(t.customerPhone) === meTen),
     );
     if (openSent) {
       const next: Ticket = {
@@ -324,6 +326,8 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
         vendorId: vendorId,
         vendorShop,
         vendorPhone,
+        customerName: customerName || "Shop",
+        customerPhone: orderPhone,
         transcript: [openSent.transcript, transcript].filter(Boolean).join("\n"),
         lines: [...openSent.lines, ...lines],
         status: openSent.lines.some((l) => l.status !== "pending") ? "reviewing" : "sent",
@@ -349,6 +353,8 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
         vendorId: vendorId,
         vendorShop,
         vendorPhone,
+        customerName: customerName || "Shop",
+        customerPhone: orderPhone,
         transcript,
         lines,
         status: "sent",
@@ -367,13 +373,17 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       void navigate({ to: "/ticket/$ticketId", params: { ticketId: next.id } });
       return;
     }
-    const open = findOpenTicket(vendorId) || findOpenTicket(vendor.id);
+    const open = [findOpenTicket(vendorId), findOpenTicket(vendor.id)].find(
+      (t) => t && (!meTen || phoneDigits(t.customerPhone) === meTen),
+    );
     if (open) {
       const next: Ticket = {
         ...open,
         vendorId: vendorId,
         vendorShop,
         vendorPhone,
+        customerName: customerName || "Shop",
+        customerPhone: orderPhone,
         transcript: [open.transcript, transcript].filter(Boolean).join("\n"),
         lines: [...open.lines, ...lines],
         status: open.lines.some((l) => l.status !== "pending") ? "reviewing" : "sent",
@@ -396,7 +406,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       id: crypto.randomUUID(),
       vendorId,
       vendorShop,
-        vendorPhone,
+      vendorPhone,
       customerName: customerName || "Shop",
       customerPhone: orderPhone,
       language: language || "en-IN",

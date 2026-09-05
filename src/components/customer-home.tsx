@@ -57,8 +57,8 @@ export function CustomerHome() {
         .then((rows) => {
           if (!Array.isArray(rows) || !rows.length) return;
           const mine = rows.filter((t) => phoneDigits(t.customerPhone) === meTen);
-          if (!mine.length) return;
-          useVaani.setState({ tickets: mergeTicketLists(useVaani.getState().tickets, mine) });
+          const localMine = useVaani.getState().tickets.filter((t) => phoneDigits(t.customerPhone) === meTen);
+          useVaani.setState({ tickets: mergeTicketLists(localMine, mine) });
         })
         .catch(() => {
           /* local tickets */
@@ -413,7 +413,7 @@ export function CustomerHome() {
           <h2 className="mb-3 font-display text-2xl tracking-tight">{t("yourRequests")}</h2>
           <OrderDateFilter value={dateFilter} onChange={setDateFilter} />
           {(() => {
-            const rows = filterByDate(tickets, dateFilter);
+            const rows = filterByDate(sent, dateFilter);
             if (rows.length === 0) {
               return <p className="text-sm text-muted">{t("noOrdersDates")}</p>;
             }
