@@ -10,6 +10,7 @@ import {
   deleteReminder,
   listReminders,
   mergeReminders,
+  rememberGoneReminder,
   upsertReminder,
 } from "@/lib/vaani/reminders";
 import { formatInPhone, phoneDigits } from "@/lib/vaani/seed";
@@ -236,7 +237,9 @@ function ReminderForm({
     for (const id of ids) {
       deleteReminder(id);
       try {
-        await deleteReminderRemote({ data: { id } });
+        await deleteReminderRemote({
+          data: { id, ownerTen, contactTen, notifyBoth },
+        });
       } catch {
         /* keep going */
       }
@@ -246,6 +249,7 @@ function ReminderForm({
     } catch {
       /* ignore */
     }
+    rememberGoneReminder(ownerTen, contactTen, notifyBoth);
     setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
     setHasSaved(false);
     setMsg(null);

@@ -2,6 +2,45 @@ import { phoneDigits } from "./seed";
 import type { Reminder, ReminderRepeat } from "./types";
 
 const KEY = "vaani-reminders-v1";
+const GONE = "vaani-reminders-gone";
+
+function goneKey(owner: string, contact: string, both: boolean) {
+  return `${phoneDigits(owner)}:${phoneDigits(contact)}:${both ? "1" : "0"}`;
+}
+
+function loadGone(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(GONE) || "[]";
+    const rows = JSON.parse(raw) as string[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberGoneReminder(owner: string, contact: string, both: boolean) {
+  const key = goneKey(owner, contact, both);
+  const next = [...new Set([...loadGone(), key])];
+  try {
+    localStorage.setItem(GONE, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function forgetGoneReminder(owner: string, contact: string, both: boolean) {
+  const key = goneKey(owner, contact, both);
+  try {
+    localStorage.setItem(GONE, JSON.stringify(loadGone().filter((k) => k !== key)));
+  } catch {
+    /* ignore */
+  }
+}
+
+function isGone(row: Reminder) {
+  return loadGone().includes(goneKey(row.ownerTen, row.contactTen, Boolean(row.notifyBoth)));
+}
 
 function loadAll(): Reminder[] {
   if (typeof window === "undefined") return [];
@@ -22,10 +61,11 @@ function saveAll(rows: Reminder[]) {
 }
 
 export function listReminders(): Reminder[] {
-  return loadAll();
+  return loadAll().filter((r) => !isGone(r));
 }
 
 export function upsertReminder(row: Reminder) {
+  forgetGoneReminder(row.ownerTen, row.contactTen, Boolean(row.notifyBoth));
   const all = loadAll().filter((r) => r.id !== row.id);
   all.push(row);
   saveAll(all);
@@ -38,6 +78,7 @@ export function deleteReminder(id: string) {
 export function mergeReminders(extra: Reminder[]) {
   const map = new Map(loadAll().map((r) => [r.id, r]));
   for (const r of extra) {
+    if (isGone(r)) continue;
     const prev = map.get(r.id);
     if (!prev) {
       map.set(r.id, r);

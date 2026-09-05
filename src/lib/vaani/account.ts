@@ -905,11 +905,23 @@ export const saveReminder = createServerFn({ method: "POST" })
 
 export const deleteReminderRemote = createServerFn({ method: "POST" })
   .middleware([vaaniGate])
-  .validator((input: { id: string }) => input)
+  .validator((input: { id: string; ownerTen?: string; contactTen?: string; notifyBoth?: boolean }) => input)
   .handler(async ({ data }) => {
     const sql = await getSql();
     await ensureVaaniSchema(sql);
     await sql.query(`delete from vaani_reminders where id = $1`, [data.id]);
+    const owner = digits(data.ownerTen || "");
+    const contact = digits(data.contactTen || "");
+    if (owner.length === 10 && contact.length === 10) {
+      try {
+        await sql.query(
+          `delete from vaani_reminders where owner_ten = $1 and contact_ten = $2 and coalesce(notify_both, false) = $3`,
+          [owner, contact, Boolean(data.notifyBoth)],
+        );
+      } catch {
+        await sql.query(`delete from vaani_reminders where owner_ten = $1 and contact_ten = $2`, [owner, contact]);
+      }
+    }
     return { ok: true as const };
   });
 
