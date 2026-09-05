@@ -104,8 +104,8 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
   const user = loginTen
     ? { id: userId, displayName: userName, primaryEmail: userEmail }
     : null;
-  const tickets = useVaani((s) => s.tickets);
-  const incoming = useVaani((s) => s.incoming);
+  const tickets = useVaani((s) => s.tickets) ?? [];
+  const incoming = useVaani((s) => s.incoming) ?? [];
   const prevFp = useRef("");
   const prevAll = useRef<Ticket[]>([]);
   const restoredFor = useRef("");

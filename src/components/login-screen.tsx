@@ -151,24 +151,17 @@ export function resetLoginGate() {
   window.dispatchEvent(new Event("vaani-auth"));
 }
 
-class ShellGuard extends Component<{ children: ReactNode }, { message: string }> {
-  state = { message: "" };
-  static getDerivedStateFromError(err: Error) {
-    return { message: err.message };
+class ShellGuard extends Component<{ children: ReactNode }, { tick: number; hits: number }> {
+  state = { tick: 0, hits: 0 };
+  static getDerivedStateFromError() {
+    return { tick: Date.now() };
+  }
+  componentDidCatch() {
+    this.setState((s) => ({ hits: s.hits + 1 }));
+    if (this.state.hits >= 3) window.location.reload();
   }
   render() {
-    if (this.state.message) {
-      return (
-        <main className="min-h-dvh bg-bg p-6 text-ink">
-          <p className="font-medium">{tr(useVaani.getState().language || "en-IN", "shopViewError")}</p>
-          <p className="mt-2 text-sm text-danger">{this.state.message}</p>
-          <button type="button" className="mt-4 rounded-full border px-4 py-2 text-sm" onClick={() => window.location.reload()}>
-            Reload
-          </button>
-        </main>
-      );
-    }
-    return this.props.children;
+    return <div key={this.state.tick}>{this.props.children}</div>;
   }
 }
 
