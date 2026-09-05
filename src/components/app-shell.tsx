@@ -268,8 +268,10 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         if (!targets.includes(login)) continue;
         const owner = phoneDigits(r.ownerTen);
         const contact = phoneDigits(r.contactTen);
-        const isContact = Boolean(r.notifyBoth) && login === contact;
-        const dueNow = isReminderDue(r) || dueNowIds.has(r.id) || (isContact && (r.lastFired || "") === today && reminderTimeIsNow(r));
+        const dueNow =
+          isReminderDue(r) ||
+          dueNowIds.has(r.id) ||
+          ((r.lastFired || "") === today && reminderTimeIsNow(r));
         if (!dueNow) continue;
         const nid = `bell-${owner}-${contact}-${login}-${today}`;
         let firstBell = true;

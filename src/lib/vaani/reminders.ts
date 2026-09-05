@@ -86,7 +86,7 @@ function parseTime(hhmm: string) {
 export function reminderTimeIsNow(row: Reminder, now = new Date()): boolean {
   const mins = minutesNow(now);
   const at = parseTime(row.time);
-  return mins >= at && mins <= at + 1;
+  return mins >= at && mins <= at + 3;
 }
 
 export function isReminderDue(row: Reminder, now = new Date()): boolean {
