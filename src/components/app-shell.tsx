@@ -14,6 +14,7 @@ import { unlockBeep, playBeep, diffTicketEvents } from "@/lib/vaani/notify";
 import { enablePush, showLocalPopup } from "@/lib/vaani/push-client";
 import {
   isReminderDue,
+  reminderTimeIsNow,
   listReminders,
   markBellSeen,
   markFired,
@@ -268,7 +269,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         const owner = phoneDigits(r.ownerTen);
         const contact = phoneDigits(r.contactTen);
         const isContact = Boolean(r.notifyBoth) && login === contact;
-        const dueNow = isReminderDue(r) || dueNowIds.has(r.id) || (isContact && (r.lastFired || "") === today);
+        const dueNow = isReminderDue(r) || dueNowIds.has(r.id) || (isContact && (r.lastFired || "") === today && reminderTimeIsNow(r));
         if (!dueNow) continue;
         const nid = `bell-${owner}-${contact}-${login}-${today}`;
         let firstBell = true;

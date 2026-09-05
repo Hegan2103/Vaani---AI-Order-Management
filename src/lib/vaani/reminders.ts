@@ -83,12 +83,16 @@ function parseTime(hhmm: string) {
   return (h || 0) * 60 + (m || 0);
 }
 
+export function reminderTimeIsNow(row: Reminder, now = new Date()): boolean {
+  const mins = minutesNow(now);
+  const at = parseTime(row.time);
+  return mins >= at && mins <= at + 1;
+}
+
 export function isReminderDue(row: Reminder, now = new Date()): boolean {
   const today = todayStamp(now);
   if (row.lastFired === today) return false;
-  const mins = minutesNow(now);
-  const at = parseTime(row.time);
-  if (mins < at || mins > at + 1) return false;
+  if (!reminderTimeIsNow(row, now)) return false;
   if (row.repeat === "daily") return true;
   if (row.repeat === "weekly") return now.getDay() === (row.weekday ?? 1);
   if (row.repeat === "once") return (row.date || "") === today;
