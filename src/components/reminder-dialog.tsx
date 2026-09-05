@@ -67,14 +67,26 @@ function ReminderForm({
   function formKey() {
     return `vaani-reminder-form:${phoneDigits(ownerTen)}:${phoneDigits(contactTen)}:${notifyBoth ? "vendor" : "customer"}`;
   }
-  function readFormCache(): Reminder | undefined {
-    if (typeof window === "undefined" || ownerTen.length !== 10 || contactTen.length !== 10) return undefined;
+  function writeFormCache(value: Reminder | null) {
     try {
-      const raw = localStorage.getItem(formKey());
+      const raw = value ? JSON.stringify({ saved: true, reminder: value }) : JSON.stringify({ saved: false });
+      localStorage.setItem(formKey(), raw);
+      sessionStorage.setItem(formKey(), raw);
+    } catch {
+      /* ignore */
+    }
+  }
+  function readFormCache(): Reminder | null | undefined {
+    if (typeof window === "undefined" || contactTen.length !== 10) return undefined;
+    try {
+      const raw = localStorage.getItem(formKey()) || sessionStorage.getItem(formKey());
       if (!raw) return undefined;
-      const parsed = JSON.parse(raw) as Reminder;
-      if (!parsed || typeof parsed !== "object") return undefined;
-      return parsed;
+      const parsed = JSON.parse(raw) as { saved?: boolean; reminder?: Reminder } & Reminder;
+      if (parsed && parsed.saved === false) return null;
+      const rem = (parsed.reminder || parsed) as Reminder;
+      if (!rem || typeof rem !== "object") return undefined;
+      if (parsed.saved === true || rem.message || rem.time) return rem;
+      return undefined;
     } catch {
       return undefined;
     }
@@ -84,16 +96,16 @@ function ReminderForm({
   }
   function latestForPair() {
     const cached = readFormCache();
-    if (cached && sameSide(cached) && (cached.message || cached.time)) return cached;
-    const listed = listReminders()
+    if (cached === null) return undefined;
+    if (cached && sameSide(cached)) return cached;
+    return listReminders()
       .filter(
         (r) =>
           phoneDigits(r.ownerTen) === ownerTen &&
           phoneDigits(r.contactTen) === contactTen &&
           sameSide(r),
       )
-      .sort((a, b) => String(b.createdAt || b.time || "").localeCompare(String(a.createdAt || a.time || "")));
-    return listed[0];
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
   }
   const [row, setRow] = useState<Reminder>(() => {
     const hit = latestForPair();
@@ -127,7 +139,12 @@ function ReminderForm({
         const rows = Array.isArray(remote) ? remote : [];
         if (rows.length) mergeReminders(rows as Reminder[]);
         const cached = readFormCache();
-        if (cached && sameSide(cached) && (cached.time || cached.message)) {
+        if (cached === null) {
+          setHasSaved(false);
+          setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
+          return;
+        }
+        if (cached && sameSide(cached)) {
           setHasSaved(true);
           setRow({
             ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
@@ -195,11 +212,7 @@ function ReminderForm({
       void deleteReminderRemote({ data: { id: old.id } }).catch(() => undefined);
     }
     upsertReminder(next);
-    try {
-      localStorage.setItem(formKey(), JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
+    writeFormCache(next);
     try {
       await saveReminder({ data: { reminder: next } });
     } catch {
@@ -259,11 +272,7 @@ function ReminderForm({
         /* keep going */
       }
     }
-    try {
-      localStorage.removeItem(formKey());
-    } catch {
-      /* ignore */
-    }
+    writeFormCache(null);
     rememberGoneReminder(ownerTen, contactTen, notifyBoth);
     setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
     setHasSaved(false);
