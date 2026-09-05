@@ -220,6 +220,41 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     const me = liveLoginTen() || readLoginTen() || phoneDigits(customerPhone);
     if (me.length !== 10) return;
     let stop = false;
+    async function pullInbox() {
+      if (stop || isSignedOut()) return;
+      const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
+      if (login.length !== 10) return;
+      const inboxRaw = await listInboxNotices({ data: { phone: login } });
+      const inbox = Array.isArray(inboxRaw)
+        ? inboxRaw
+        : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
+          ? ((inboxRaw as { result: Array<{ id: string; title: string; body: string; ticketId: string; at?: string }> }).result)
+          : [];
+      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      for (const n of inbox) {
+        if (!String(n.ticketId || "").startsWith("reminder:")) continue;
+        const at = n.at ? Date.parse(n.at) : Date.now();
+        if (Number.isFinite(at) && at < cutoff) continue;
+        if (useVaani.getState().notices.some((row) => row.id === n.id)) continue;
+        const remId = String(n.ticketId).slice("reminder:".length);
+        const hit = listReminders().find((r) => r.id === remId);
+        const owner = phoneDigits(hit?.ownerTen || "");
+        const other = login === owner ? phoneDigits(hit?.contactTen || "") : owner;
+        const title = bookNameFor(other, n.title) || n.title || "Reminder";
+        pushNotices([
+          {
+            id: n.id,
+            at: n.at || new Date().toISOString(),
+            title,
+            body: n.body || title,
+            ticketId: n.ticketId,
+            read: false,
+            audience: useVaani.getState().role,
+          },
+        ]);
+        if (Number.isFinite(at) && Date.now() - at < 2 * 60 * 1000) playBeep();
+      }
+    }
     async function tick() {
       if (stop || isSignedOut()) return;
       try {
@@ -250,46 +285,26 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         /* process due optional */
       }
       try {
-        const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-        const inboxRaw = await listInboxNotices({ data: { phone: login } });
-        const inbox = Array.isArray(inboxRaw)
-          ? inboxRaw
-          : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
-            ? ((inboxRaw as { result: Array<{ id: string; title: string; body: string; ticketId: string; at?: string }> }).result)
-            : [];
-        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        for (const n of inbox) {
-          if (!String(n.ticketId || "").startsWith("reminder:")) continue;
-          const at = n.at ? Date.parse(n.at) : Date.now();
-          if (Number.isFinite(at) && at < cutoff) continue;
-          if (useVaani.getState().notices.some((row) => row.id === n.id)) continue;
-          const remId = String(n.ticketId).slice("reminder:".length);
-          const hit = listReminders().find((r) => r.id === remId);
-          const owner = phoneDigits(hit?.ownerTen || "");
-          const other = login === owner ? phoneDigits(hit?.contactTen || "") : owner;
-          const title = bookNameFor(other, n.title) || n.title || "Reminder";
-          pushNotices([
-            {
-              id: n.id,
-              at: n.at || new Date().toISOString(),
-              title,
-              body: n.body || title,
-              ticketId: n.ticketId,
-              read: false,
-              audience: useVaani.getState().role,
-            },
-          ]);
-          if (Number.isFinite(at) && Date.now() - at < 2 * 60 * 1000) playBeep();
-        }
+        await pullInbox();
       } catch {
         /* server due optional */
       }
     }
+    function onWake() {
+      if (document.visibilityState && document.visibilityState !== "visible") return;
+      void pullInbox().catch(() => undefined);
+    }
     void tick();
     const id = window.setInterval(() => void tick(), 3000);
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    window.addEventListener("pageshow", onWake);
     return () => {
       stop = true;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+      window.removeEventListener("pageshow", onWake);
     };
   }, [pushNotices, customerPhone]);
 
