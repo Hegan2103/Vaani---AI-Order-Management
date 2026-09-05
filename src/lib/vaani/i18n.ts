@@ -46,6 +46,7 @@ const EN = {
   typeBusiness: "Business",
   typeIndividual: "Individual",
   individualHint: "You can order from shops. You cannot sell on Vaani.",
+  frozen: "Frozen",
   loggedMobile: "Logged in mobile",
   yourTrade: "Your trade",
   selectIndustry: "Select industry",

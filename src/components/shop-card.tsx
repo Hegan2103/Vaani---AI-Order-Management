@@ -181,6 +181,14 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     window.dispatchEvent(new Event("vaani-shop"));
   }
 
+  const box = "mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm";
+  const frozenBox = `${box} bg-muted/40 text-muted cursor-not-allowed`;
+  const liveType = firstFill ? typeDraft : savedType;
+  const nameFrozen = !firstFill;
+  const typeFrozen = !firstFill;
+  const extraFrozen = liveType === "individual" || !firstFill;
+  const sellFrozen = liveType === "individual";
+
   return (
     <div className="rounded-[var(--radius-xl)] border border-line bg-surface p-5" suppressHydrationWarning>
       <div className="flex items-center justify-between gap-2">
@@ -199,24 +207,42 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
       </div>
 
       {locked ? (
-        <div className="mt-3">
-          <p className="font-medium">{savedName}</p>
-          <p className="text-sm text-muted">{savedPhone || t("noPhone")}</p>
-          <p className="mt-1 text-sm text-muted">
-            {savedType === "individual" ? t("typeIndividual") : t("typeBusiness")}
-            {savedType === "business" && savedIndustry ? ` · ${tradeLabel(savedIndustry)}` : ""}
-            {savedType === "business" ? (savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`) : ` · ${t("asCustomer")}`}
-            {` · ${LANGUAGES.find((l) => l.id === savedLang)?.label ?? savedLang}`}
-          </p>
-          {shopMsg ? <p className="mt-2 text-sm text-ok">{shopMsg}</p> : null}
+        <div className="mt-3 space-y-3">
+          <div>
+            <label className="block text-xs text-muted">{t("accountType")} · {t("frozen")}</label>
+            <input readOnly value={savedType === "individual" ? t("typeIndividual") : t("typeBusiness")} className={frozenBox} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted">{savedType === "individual" ? t("fullName") : t("shopName")} · {t("frozen")}</label>
+            <input readOnly value={savedName} className={frozenBox} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted">{t("loggedMobile")} · {t("frozen")}</label>
+            <input readOnly value={savedPhone || t("noPhone")} className={frozenBox} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted">{t("yourTrade")} · {t("frozen")}</label>
+            <input readOnly value={savedType === "individual" ? "—" : savedIndustry ? tradeLabel(savedIndustry) : t("tradeNotSet")} className={frozenBox} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted">{t("language")} · {t("frozen")}</label>
+            <input readOnly value={LANGUAGES.find((l) => l.id === savedLang)?.label ?? savedLang} className={frozenBox} />
+          </div>
+          <label className={`flex items-start gap-2 text-sm ${savedType === "individual" ? "opacity-60" : ""}`}>
+            <input type="checkbox" className="mt-1" checked={savedVendor} disabled={savedType === "individual"} onChange={(e) => savedType === "business" ? setSellNow(e.target.checked) : undefined} />
+            <span>
+              <span className="font-medium">{t("sellOnVaaniShort")}{savedType === "individual" ? ` · ${t("frozen")}` : ""}</span>
+              <span className="mt-0.5 block text-xs text-muted">{t("sellOnVaani")}</span>
+            </span>
+          </label>
+          {shopMsg ? <p className="text-sm text-ok">{shopMsg}</p> : null}
         </div>
       ) : (
         <div className="mt-3">
-          {firstFill ? (
-            <>
-          <label className="block text-xs text-muted">{t("accountType")}</label>
+          <label className="block text-xs text-muted">{t("accountType")}{typeFrozen ? ` · ${t("frozen")}` : ""}</label>
           <select
-            value={typeDraft}
+            value={liveType}
+            disabled={typeFrozen}
             onChange={(e) => {
               const next = e.target.value === "individual" ? "individual" : "business";
               setTypeDraft(next);
@@ -225,39 +251,34 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
                 setIndustryDraft("");
               }
             }}
-            className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
+            className={typeFrozen ? frozenBox : box}
           >
             <option value="business">{t("typeBusiness")}</option>
             <option value="individual">{t("typeIndividual")}</option>
           </select>
-          <label className="mt-3 block text-xs text-muted">{typeDraft === "individual" ? t("fullName") : t("shopName")}</label>
-            </>
-          ) : (
-            <label className="block text-xs text-muted">{savedType === "individual" ? t("fullName") : t("shopName")}</label>
-          )}
+          <label className="mt-3 block text-xs text-muted">{liveType === "individual" ? t("fullName") : t("shopName")}{nameFrozen ? ` · ${t("frozen")}` : ""}</label>
           <input
             ref={nameRef}
             value={shopDraft}
-            readOnly={!firstFill}
+            readOnly={nameFrozen}
             onChange={(e) => {
               setShopDraft(e.target.value);
               setShopMsg(null);
             }}
-            className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
+            className={nameFrozen ? frozenBox : box}
           />
-          <label className="mt-3 block text-xs text-muted">{t("loggedMobile")}</label>
+          <label className="mt-3 block text-xs text-muted">{t("loggedMobile")} · {t("frozen")}</label>
           <input
             readOnly
             value={loginTen.length === 10 ? formatInPhone(loginTen) : savedPhone}
-            className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm text-muted"
+            className={frozenBox}
           />
-          {firstFill && typeDraft === "business" ? (
-            <>
-          <label className="mt-3 block text-xs text-muted">{t("yourTrade")}</label>
+          <label className="mt-3 block text-xs text-muted">{t("yourTrade")}{extraFrozen ? ` · ${t("frozen")}` : ""}</label>
           <select
             value={industryDraft}
+            disabled={extraFrozen}
             onChange={(e) => setIndustryDraft(e.target.value as Industry | "")}
-            className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
+            className={extraFrozen ? frozenBox : box}
           >
             <option value="">{t("selectIndustry")}</option>
             {Object.keys(INDUSTRY_LABEL).map((k) => (
@@ -266,11 +287,12 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
               </option>
             ))}
           </select>
-          <label className="mt-3 block text-xs text-muted">{t("language")}</label>
+          <label className="mt-3 block text-xs text-muted">{t("language")}{extraFrozen ? ` · ${t("frozen")}` : ""}</label>
           <select
             value={langDraft}
+            disabled={extraFrozen}
             onChange={(e) => setLangDraft(e.target.value)}
-            className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
+            className={extraFrozen ? frozenBox : box}
           >
             {LANGUAGES.map((l) => (
               <option key={l.id} value={l.id}>
@@ -278,20 +300,16 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
               </option>
             ))}
           </select>
-            </>
-          ) : null}
-          {firstFill && typeDraft === "individual" ? (
+          {liveType === "individual" ? (
             <p className="mt-3 text-xs text-muted">{t("individualHint")}</p>
           ) : null}
-          {(firstFill && typeDraft === "business") || (!firstFill && savedType === "business") ? (
-          <label className="mt-3 flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-1" checked={sellDraft} onChange={(e) => setSellNow(e.target.checked)} />
+          <label className={`mt-3 flex items-start gap-2 text-sm ${sellFrozen ? "opacity-60" : ""}`}>
+            <input type="checkbox" className="mt-1" checked={sellFrozen ? false : sellDraft} disabled={sellFrozen} onChange={(e) => setSellNow(e.target.checked)} />
             <span>
-              <span className="font-medium">{t("sellOnVaaniShort")}</span>
+              <span className="font-medium">{t("sellOnVaaniShort")}{sellFrozen ? ` · ${t("frozen")}` : ""}</span>
               <span className="mt-0.5 block text-xs text-muted">{t("sellOnVaani")}</span>
             </span>
           </label>
-          ) : null}
           {shopMsg ? (
             <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>{shopMsg}</p>
           ) : null}
