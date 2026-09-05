@@ -193,117 +193,143 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
 
   return (
     <div className="rounded-[var(--radius-xl)] border border-line bg-surface p-5" suppressHydrationWarning>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("yourShop")}</p>
-      <div className="mt-3">
-        <label className="block text-xs text-muted">
-          {t("accountType")}
-          {typeFrozen ? ` · ${t("frozen")}` : ""}
-        </label>
-        <select
-          value={liveType}
-          disabled={typeFrozen}
-          onChange={(e) => {
-            const next = e.target.value === "individual" ? "individual" : "business";
-            setTypeDraft(next);
-            if (next === "individual") {
-              setSellDraft(false);
-              setIndustryDraft("");
-            }
-          }}
-          className={typeFrozen ? frozenBox : box}
-          style={typeFrozen ? frozenStyle : undefined}
-        >
-          <option value="business">{t("typeBusiness")}</option>
-          <option value="individual">{t("typeIndividual")}</option>
-        </select>
-        <label className="mt-3 block text-xs text-muted">
-          {liveType === "individual" ? t("fullName") : t("shopName")}
-          {nameFrozen ? ` · ${t("frozen")}` : ""}
-        </label>
-        <input
-          ref={nameRef}
-          value={firstFill ? shopDraft : savedName}
-          readOnly={nameFrozen}
-          onChange={(e) => {
-            setShopDraft(e.target.value);
-            setShopMsg(null);
-          }}
-          className={nameFrozen ? frozenBox : box}
-          style={nameFrozen ? frozenStyle : undefined}
-        />
-        <label className="mt-3 block text-xs text-muted">
-          {t("loggedMobile")} · {t("frozen")}
-        </label>
-        <input
-          readOnly
-          value={loginTen.length === 10 ? formatInPhone(loginTen) : savedPhone}
-          className={frozenBox}
-          style={frozenStyle}
-        />
-        <label className="mt-3 block text-xs text-muted">
-          {t("yourTrade")}
-          {extraFrozen ? ` · ${t("frozen")}` : ""}
-        </label>
-        <select
-          value={liveType === "individual" ? "" : firstFill ? industryDraft : savedIndustry}
-          disabled={extraFrozen}
-          onChange={(e) => setIndustryDraft(e.target.value as Industry | "")}
-          className={extraFrozen ? frozenBox : box}
-          style={extraFrozen ? frozenStyle : undefined}
-        >
-          <option value="">{t("selectIndustry")}</option>
-          {Object.keys(INDUSTRY_LABEL).map((k) => (
-            <option key={k} value={k}>
-              {tradeLabel(k as Industry)}
-            </option>
-          ))}
-        </select>
-        <label className="mt-3 block text-xs text-muted">
-          {t("language")}
-          {extraFrozen ? ` · ${t("frozen")}` : ""}
-        </label>
-        <select
-          value={firstFill ? langDraft : savedLang}
-          disabled={extraFrozen}
-          onChange={(e) => setLangDraft(e.target.value)}
-          className={extraFrozen ? frozenBox : box}
-          style={extraFrozen ? frozenStyle : undefined}
-        >
-          {LANGUAGES.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.label}
-            </option>
-          ))}
-        </select>
-        {liveType === "individual" ? <p className="mt-3 text-xs text-muted">{t("individualHint")}</p> : null}
-        <label className={`mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-line px-3 py-3 text-sm ${sellFrozen ? "cursor-not-allowed" : ""}`} style={sellFrozen ? frozenStyle : undefined}>
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={sellFrozen ? false : firstFill ? sellDraft : savedVendor}
-            disabled={sellFrozen}
-            onChange={(e) => setSellNow(e.target.checked)}
-          />
-          <span>
-            <span className="font-medium">
-              {t("sellOnVaaniShort")}
-              {sellFrozen ? ` · ${t("frozen")}` : ""}
-            </span>
-            <span className="mt-0.5 block text-xs text-muted">{t("sellOnVaani")}</span>
-          </span>
-        </label>
-        {shopMsg ? (
-          <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>{shopMsg}</p>
-        ) : null}
-        {firstFill ? (
-          <div className="mt-4 flex gap-2">
-            <Button type="button" className="flex-1" onClick={saveShop}>
-              {t("saveShop")}
-            </Button>
-          </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("yourShop")}</p>
+        {locked ? (
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1 rounded-full border border-line bg-surface px-3 text-sm"
+            onClick={startEdit}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <Pencil className="size-3.5" />
+            {t("edit")}
+          </button>
         ) : null}
       </div>
+
+      {locked ? (
+        <div className="mt-3">
+          <p className="font-medium">{savedName}</p>
+          <p className="text-sm text-muted">{savedPhone || t("noPhone")}</p>
+          <p className="mt-1 text-sm text-muted">
+            {savedType === "individual" ? t("typeIndividual") : t("typeBusiness")}
+            {savedType === "business" && savedIndustry ? ` · ${tradeLabel(savedIndustry)}` : ""}
+            {savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`}
+            {` · ${LANGUAGES.find((l) => l.id === savedLang)?.label ?? savedLang}`}
+          </p>
+          {shopMsg ? <p className="mt-2 text-sm text-ok">{shopMsg}</p> : null}
+        </div>
+      ) : (
+        <div className="mt-3">
+          <label className="block text-xs text-muted">
+            {t("accountType")}
+            {typeFrozen ? ` · ${t("frozen")}` : ""}
+          </label>
+          <select
+            value={liveType}
+            disabled={typeFrozen}
+            onChange={(e) => {
+              const next = e.target.value === "individual" ? "individual" : "business";
+              setTypeDraft(next);
+              if (next === "individual") {
+                setSellDraft(false);
+                setIndustryDraft("");
+              }
+            }}
+            className={typeFrozen ? frozenBox : box}
+            style={typeFrozen ? frozenStyle : undefined}
+          >
+            <option value="business">{t("typeBusiness")}</option>
+            <option value="individual">{t("typeIndividual")}</option>
+          </select>
+          <label className="mt-3 block text-xs text-muted">
+            {liveType === "individual" ? t("fullName") : t("shopName")}
+            {nameFrozen ? ` · ${t("frozen")}` : ""}
+          </label>
+          <input
+            ref={nameRef}
+            value={shopDraft}
+            readOnly={nameFrozen}
+            onChange={(e) => {
+              setShopDraft(e.target.value);
+              setShopMsg(null);
+            }}
+            className={nameFrozen ? frozenBox : box}
+            style={nameFrozen ? frozenStyle : undefined}
+          />
+          <label className="mt-3 block text-xs text-muted">
+            {t("loggedMobile")} · {t("frozen")}
+          </label>
+          <input readOnly value={loginTen.length === 10 ? formatInPhone(loginTen) : savedPhone} className={frozenBox} style={frozenStyle} />
+          <label className="mt-3 block text-xs text-muted">
+            {t("yourTrade")}
+            {extraFrozen ? ` · ${t("frozen")}` : ""}
+          </label>
+          <select
+            value={industryDraft}
+            disabled={extraFrozen}
+            onChange={(e) => setIndustryDraft(e.target.value as Industry | "")}
+            className={extraFrozen ? frozenBox : box}
+            style={extraFrozen ? frozenStyle : undefined}
+          >
+            <option value="">{t("selectIndustry")}</option>
+            {Object.keys(INDUSTRY_LABEL).map((k) => (
+              <option key={k} value={k}>
+                {tradeLabel(k as Industry)}
+              </option>
+            ))}
+          </select>
+          <label className="mt-3 block text-xs text-muted">
+            {t("language")}
+            {extraFrozen ? ` · ${t("frozen")}` : ""}
+          </label>
+          <select
+            value={langDraft}
+            disabled={extraFrozen}
+            onChange={(e) => setLangDraft(e.target.value)}
+            className={extraFrozen ? frozenBox : box}
+            style={extraFrozen ? frozenStyle : undefined}
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+          {liveType === "individual" ? <p className="mt-3 text-xs text-muted">{t("individualHint")}</p> : null}
+          <label
+            className={`mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-line px-3 py-3 text-sm ${sellFrozen ? "cursor-not-allowed" : ""}`}
+            style={sellFrozen ? frozenStyle : undefined}
+          >
+            <input type="checkbox" className="mt-1" checked={sellFrozen ? false : sellDraft} disabled={sellFrozen} onChange={(e) => setSellNow(e.target.checked)} />
+            <span>
+              <span className="font-medium">
+                {t("sellOnVaaniShort")}
+                {sellFrozen ? ` · ${t("frozen")}` : ""}
+              </span>
+              <span className="mt-0.5 block text-xs text-muted">{t("sellOnVaani")}</span>
+            </span>
+          </label>
+          {shopMsg ? (
+            <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>{shopMsg}</p>
+          ) : null}
+          <div className="mt-4 flex gap-2">
+            {firstFill ? (
+              <Button type="button" className="flex-1" onClick={saveShop}>
+                {t("saveShop")}
+              </Button>
+            ) : null}
+            {savedName ? (
+              <Button type="button" variant="outline" className="flex-1" onClick={stopEdit}>
+                {t("cancel")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      )}
       {extra}
     </div>
   );
 }
+
