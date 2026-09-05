@@ -144,7 +144,7 @@ const EN = {
   stopShowList: "Stop and show list",
   pleaseWait: "Please wait…",
   orType: "Or type the list",
-  parseTyped: "Parse typed list",
+  parseTyped: "Parse Typed List",
   extractedList: "Extracted list",
   youSaid: "You said:",
   noLines: "No lines yet. Speak or type a product and quantity.",

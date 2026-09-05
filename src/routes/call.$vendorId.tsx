@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Mic, Square } from "lucide-react";
+import { Mic, Square, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { lookupVendorByPhone, saveTicket } from "@/lib/vaani/account";
@@ -39,6 +40,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
   const [lines, setLines] = useState<LineItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"processing" | "sending" | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -184,8 +186,11 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
     const vendor = vendorRef.current;
     if (!vendor) return;
     sessionRef.current += 1;
-    setPhase("parsing");
-    setError(null);
+    flushSync(() => {
+      setBusy("processing");
+      setPhase("parsing");
+      setError(null);
+    });
     const rec = recRef.current;
     if (rec && rec.state !== "inactive") {
       await new Promise<void>((resolve) => {
@@ -260,6 +265,8 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       }
       setError(err instanceof Error ? err.message : t("couldNotRead"));
       setPhase("idle");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -275,6 +282,8 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
   async function send() {
     const vendor = vendorRef.current;
     if (!vendor) return;
+    flushSync(() => setBusy("sending"));
+    try {
     const loginTen = liveLoginTen() || readLoginTen();
     const vendorTen = phoneDigits(vendor.phone) || String(vendor.id).match(/(\d{10})/)?.[1] || "";
     if (vendorTen && loginTen && vendorTen === loginTen) {
@@ -428,6 +437,9 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
       setError(t("couldNotSave"));
     }
     void navigate({ to: "/ticket/$ticketId", params: { ticketId: ticket.id } });
+    } finally {
+      setBusy(null);
+    }
   }
 
   if (!found) {
@@ -447,6 +459,15 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
 
   return (
     <>
+      {busy ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/50">
+          <div className="flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-line bg-surface px-8 py-6">
+            <Loader2 className="size-8 animate-spin text-accent" />
+            <p className="text-sm font-medium">{busy === "sending" ? "Sending" : "Processing"}</p>
+            <p className="text-xs text-muted">{t("pleaseWait")}</p>
+          </div>
+        </div>
+      ) : null}
       <Button type="button" variant="outline" size="sm" onClick={() => setCallVendorId("")}>
         {t("back")}
       </Button>
@@ -544,6 +565,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
           size="lg"
           disabled={
             !transcript.trim() ||
+            Boolean(busy) ||
             phase === "parsing" ||
             phase === "countdown" ||
             phase === "recording"
@@ -611,7 +633,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
               </div>
             ))
           )}
-          <Button className="w-full" size="lg" onClick={() => void send()} disabled={!lines.length}>
+          <Button className="w-full" size="lg" onClick={() => void send()} disabled={!lines.length || Boolean(busy)}>
             {t("sendListTo", { shop: vendor.shop })}
           </Button>
         </div>
