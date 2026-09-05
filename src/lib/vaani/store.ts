@@ -1118,8 +1118,8 @@ export const useVaani = create<State>()(
           shopSaved: Boolean(current.shopSaved || p.shopSaved || name),
           accountUserId: current.accountUserId || p.accountUserId || "",
           accountReady: Boolean(name || current.shopSaved || p.tickets?.length || current.tickets?.length),
-          tickets: mergeTicketLists(p.tickets ?? [], current.tickets),
-          incoming: mergeTicketLists(p.incoming ?? [], current.incoming),
+          tickets: mergeTicketLists(p.tickets ?? [], current.tickets ?? []),
+          incoming: mergeTicketLists(p.incoming ?? [], current.incoming ?? []),
           claimedVendorId: current.claimedVendorId || p.claimedVendorId || "",
           contacts: readDirContacts() ?? current.contacts,
           notices: current.notices?.length ? current.notices : p.notices ?? [],
@@ -1138,7 +1138,7 @@ export const useVaani = create<State>()(
         accountUserId: s.accountUserId,
         tickets: s.tickets,
         incoming: s.incoming,
-        notices: s.notices.slice(0, 20),
+        notices: (s.notices ?? []).slice(0, 20),
       }),
       storage: createJSONStorage(() => ({
         getItem: (name) => {
@@ -1286,8 +1286,8 @@ export function mergeOneTicket(local: Ticket | undefined, remote: Ticket): Ticke
 
 export function mergeTicketLists(local: Ticket[], remote: Ticket[]) {
   const map = new Map<string, Ticket>();
-  for (const t of local) map.set(t.id, t);
-  for (const t of remote) map.set(t.id, mergeOneTicket(map.get(t.id), t));
+  for (const t of local ?? []) if (t?.id) map.set(t.id, t);
+  for (const t of remote ?? []) if (t?.id) map.set(t.id, mergeOneTicket(map.get(t.id), t));
   return [...map.values()].sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt));
 }
 

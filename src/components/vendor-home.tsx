@@ -17,7 +17,7 @@ import { useT } from "@/lib/vaani/i18n";
 import { applyDirContacts, bookNameFor, directoryRows, isListedBuyer, mergeTicketLists, readAccountBackup, readLoginTen, readShopIdentity, readVendorInbox, useVaani, isOwnCustomerOrder, liveLoginTen } from "@/lib/vaani/store";
 
 export function VendorHome() {
-  const incoming = useVaani((s) => s.incoming);
+  const incoming = useVaani((s) => s.incoming) ?? [];
   const customerName = useVaani((s) => s.customerName);
   const customerPhone = useVaani((s) => s.customerPhone);
   const industry = useVaani((s) => s.industry);

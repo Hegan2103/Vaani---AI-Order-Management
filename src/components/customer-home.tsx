@@ -23,13 +23,13 @@ export function CustomerHome() {
   const navigate = useNavigate();
   const setRole = useVaani((s) => s.setRole);
   const setCallVendorId = useVaani((s) => s.setCallVendorId);
-  const contacts = useVaani((s) => s.contacts);
-  const tickets = useVaani((s) => s.tickets);
+  const contacts = useVaani((s) => s.contacts) ?? [];
+  const tickets = useVaani((s) => s.tickets) ?? [];
   const removeTicket = useVaani((s) => s.removeTicket);
   const customerName = useVaani((s) => s.customerName);
   const customerPhone = useVaani((s) => s.customerPhone);
   const mergeContacts = useVaani((s) => s.mergeContacts);
-  const liveVendors = useVaani((s) => s.liveVendors);
+  const liveVendors = useVaani((s) => s.liveVendors) ?? [];
   const setLiveVendors = useVaani((s) => s.setLiveVendors);
   const [q, setQ] = useState("");
   const [industry, setIndustry] = useState<Industry | "all">("all");

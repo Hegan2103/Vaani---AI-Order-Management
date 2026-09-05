@@ -162,6 +162,9 @@ class ShellGuard extends Component<{ children: ReactNode }, { message: string }>
         <main className="min-h-dvh bg-bg p-6 text-ink">
           <p className="font-medium">{tr(useVaani.getState().language || "en-IN", "shopViewError")}</p>
           <p className="mt-2 text-sm text-danger">{this.state.message}</p>
+          <button type="button" className="mt-4 rounded-full border px-4 py-2 text-sm" onClick={() => window.location.reload()}>
+            Reload
+          </button>
         </main>
       );
     }
