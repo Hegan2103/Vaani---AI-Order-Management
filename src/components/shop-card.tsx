@@ -151,10 +151,17 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     };
     remember(identity);
     setId(identity);
-    setShopIdentity(identity);
     EDITING = false;
     setEditing(false);
     setShopMsg(t("shopSaved"));
+    window.setTimeout(() => {
+      try {
+        setShopIdentity(identity);
+      } catch {
+        /* keep local card */
+      }
+      window.dispatchEvent(new Event("vaani-shop"));
+    }, 0);
     void saveProfile({
       data: {
         shopName,

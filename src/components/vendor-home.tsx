@@ -23,7 +23,7 @@ export function VendorHome() {
   const industry = useVaani((s) => s.industry);
   const isVendor = useVaani((s) => s.isVendor);
   const contacts = useVaani((s) => s.contacts);
-  const liveVendors = useVaani((s) => s.liveVendors);
+  const liveVendors = useVaani((s) => s.liveVendors) ?? [];
   const [dateFilter, setDateFilter] = useState<DateFilter>(DEFAULT_DATE_FILTER);
   const { t, industry: tradeLabel, locale } = useT();
 

@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Bell, Phone, Store } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, Component, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CustomerHome } from "@/components/customer-home";
 import { resetLoginGate, isSignedOut } from "@/components/login-screen";
@@ -50,6 +50,20 @@ import {
 } from "@/lib/vaani/store";
 import { LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { isRtl, useT } from "@/lib/vaani/i18n";
+
+class SoftGuard extends Component<{ children: ReactNode }, { tick: number; fail: boolean }> {
+  state = { tick: 0, fail: false };
+  static getDerivedStateFromError() {
+    return { fail: true };
+  }
+  componentDidCatch() {
+    window.setTimeout(() => this.setState((s) => ({ fail: false, tick: s.tick + 1 })), 0);
+  }
+  render() {
+    if (this.state.fail) return null;
+    return <div key={this.state.tick}>{this.props.children}</div>;
+  }
+}
 
 export function AppShell({ children, seedPhone }: { children: ReactNode; seedPhone?: string }) {
   const seedTen = phoneDigits(seedPhone || "") || (typeof window !== "undefined" ? liveLoginTen() || readLoginTen() : "");
@@ -384,10 +398,14 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       <main className="mx-auto w-full max-w-5xl px-4 py-6">
         {callVendorId && pathname !== "/vendor" ? <CallScreen vendorId={callVendorId} /> : null}
         <div hidden={!onDesk || pathname === "/vendor"}>
-          <CustomerHome />
+          <SoftGuard>
+            <CustomerHome />
+          </SoftGuard>
         </div>
         <div hidden={pathname !== "/vendor"}>
-          <VendorHome />
+          <SoftGuard>
+            <VendorHome />
+          </SoftGuard>
         </div>
         {!onDesk && !callVendorId ? children : null}
       </main>
