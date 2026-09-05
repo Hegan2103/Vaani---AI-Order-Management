@@ -177,13 +177,48 @@ function ReminderForm({
 
   async function remove() {
     if (saving) return;
-    deleteReminder(row.id);
+    flushSync(() => {
+      setSaving(true);
+      setMsg(null);
+    });
+    const ids = new Set<string>();
+    if (row.id) ids.add(row.id);
     try {
-      await deleteReminderRemote({ data: { id: row.id } });
+      const cached = readFormCache();
+      if (cached?.id) ids.add(cached.id);
     } catch {
-      /* local copy removed */
+      /* ignore */
     }
-    onClose();
+    for (const old of listReminders().filter(
+      (r) => phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen,
+    )) {
+      ids.add(old.id);
+    }
+    try {
+      const remote = await listRemindersRemote({ data: { phone: ownerTen } });
+      const rows = Array.isArray(remote) ? remote : [];
+      for (const r of rows as Reminder[]) {
+        if (phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen && r.id) ids.add(r.id);
+      }
+    } catch {
+      /* local ids only */
+    }
+    for (const id of ids) {
+      deleteReminder(id);
+      try {
+        await deleteReminderRemote({ data: { id } });
+      } catch {
+        /* keep going */
+      }
+    }
+    try {
+      localStorage.removeItem(formKey());
+    } catch {
+      /* ignore */
+    }
+    setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
+    setMsg(null);
+    setSaving(false);
   }
 
   return (
@@ -316,7 +351,7 @@ function ReminderForm({
             {t("cancel")}
           </Button>
         </div>
-        {existing ? (
+        {row.message || row.id || existing ? (
           <button type="button" className="mt-3 text-xs text-danger" onClick={() => void remove()} disabled={saving}>
             {t("deleteDraft")}
           </button>
