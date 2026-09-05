@@ -411,7 +411,22 @@ function NoticeBell() {
     return false;
   });
   const unread = visible.filter((n) => !n.read).length;
-  const ordered = [...visible].sort((a, b) => Date.parse(b.at || "") - Date.parse(a.at || ""));
+  const stamp = (n: (typeof visible)[number]) => {
+    const t = Date.parse(n.at || "");
+    return Number.isFinite(t) ? t : 0;
+  };
+  const ordered = [...visible].sort((a, b) => stamp(b) - stamp(a));
+  const when = (n: (typeof visible)[number]) => {
+    const t = stamp(n);
+    if (!t) return "";
+    return new Date(t).toLocaleString(useVaani.getState().language || "en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   function placeBox() {
     const r = btnRef.current?.getBoundingClientRect();
@@ -483,14 +498,7 @@ function NoticeBell() {
                   >
                     <p className="text-sm font-medium">{n.title}</p>
                     <p className="text-xs text-muted">{n.body}</p>
-                    <p className="text-[10px] text-subtle">
-                      {new Date(n.at).toLocaleString(useVaani.getState().language || "en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+                    {when(n) ? <p className="mt-0.5 text-xs text-muted">{when(n)}</p> : null}
                   </button>
                 </li>
               ))}
