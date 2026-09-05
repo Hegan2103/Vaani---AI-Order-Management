@@ -284,7 +284,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             className={`mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-line px-3 py-3 text-sm ${sellFrozen ? "cursor-not-allowed" : ""}`}
             style={sellFrozen ? frozenStyle : undefined}
           >
-            <input type="checkbox" className="mt-1" checked={sellFrozen ? false : sellDraft} disabled={sellFrozen} onChange={(e) => setSellNow(e.target.checked)} />
+            <input type="checkbox" className="mt-1" checked={sellFrozen ? false : sellDraft} disabled={sellFrozen} onChange={(e) => setSellDraft(e.target.checked)} />
             <span>
               <span className="font-medium">
                 {t("sellOnVaaniShort")}
@@ -297,11 +297,9 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>{shopMsg}</p>
           ) : null}
           <div className="mt-4 flex gap-2">
-            {firstFill ? (
-              <Button type="button" className="flex-1" onClick={saveShop}>
-                {t("saveShop")}
-              </Button>
-            ) : null}
+            <Button type="button" className="flex-1" onClick={saveShop}>
+              {t("saveShop")}
+            </Button>
             {savedName ? (
               <Button type="button" variant="outline" className="flex-1" onClick={stopEdit}>
                 {t("cancel")}
