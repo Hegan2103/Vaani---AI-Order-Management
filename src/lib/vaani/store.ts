@@ -62,6 +62,7 @@ export type ShopIdentity = {
   industry: Industry | "";
   isVendor: boolean;
   language: string;
+  accountType?: "business" | "individual";
 };
 
 export function loginPhoneKey() {
@@ -936,8 +937,9 @@ export const useVaani = create<State>()(
         const shopName = p.shopName.trim() || s.customerName;
         const phone = p.phone.trim() || s.customerPhone;
         const language = p.language || s.language || readUiLanguage() || "en-IN";
-        const industry = p.industry || s.industry || "";
-        const isVendor = Boolean(p.isVendor);
+        const accountType = p.accountType === "individual" ? "individual" : "business";
+        const industry = accountType === "individual" ? "" : p.industry || s.industry || "";
+        const isVendor = accountType === "individual" ? false : Boolean(p.isVendor);
         if (
           s.customerName === shopName &&
           s.customerPhone === phone &&
@@ -949,7 +951,7 @@ export const useVaani = create<State>()(
           return;
         }
         if (!shopName) return;
-        writeShopIdentity({ shopName, phone, industry, isVendor, language });
+        writeShopIdentity({ shopName, phone, industry, isVendor, language, accountType });
         if (isVendor) rememberListedVendor({ shopName, phone, industry });
         else forgetListedVendor(phoneDigits(phone));
         set({

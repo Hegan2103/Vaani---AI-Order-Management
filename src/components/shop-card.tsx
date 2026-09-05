@@ -18,9 +18,10 @@ function remember(p: Partial<ShopIdentity> | null | undefined, ten?: string) {
   LOCKED = {
     shopName,
     phone: formatInPhone(login),
-    industry: p?.industry || "",
-    isVendor: Boolean(p?.isVendor),
+    industry: p?.accountType === "individual" ? "" : p?.industry || "",
+    isVendor: p?.accountType === "individual" ? false : Boolean(p?.isVendor),
     language: p?.language || "en-IN",
+    accountType: p?.accountType === "individual" ? "individual" : "business",
   };
   try {
     sessionStorage.setItem(`${PIN_KEY}:${login}`, JSON.stringify(LOCKED));
@@ -71,6 +72,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const [industryDraft, setIndustryDraft] = useState<Industry | "">(LOCKED?.industry || "");
   const [sellDraft, setSellDraft] = useState(Boolean(LOCKED?.isVendor));
   const [langDraft, setLangDraft] = useState(LOCKED?.language || "en-IN");
+  const [typeDraft, setTypeDraft] = useState<"business" | "individual">(LOCKED?.accountType === "individual" ? "individual" : "business");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   const loginTen = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone || "");
   useLayoutEffect(() => {
@@ -83,6 +85,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
         setIndustryDraft(next?.industry || "");
         setSellDraft(Boolean(next?.isVendor));
         setLangDraft(next?.language || "en-IN");
+        setTypeDraft(next?.accountType === "individual" ? "individual" : "business");
       }
     };
     load();
@@ -100,7 +103,9 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
   const savedIndustry = shown?.industry || "";
   const savedVendor = Boolean(shown?.isVendor);
   const savedLang = shown?.language || "en-IN";
+  const savedType = shown?.accountType === "individual" ? "individual" : "business";
   const locked = Boolean(savedName) && !editing;
+  const firstFill = !savedName;
 
   function startEdit(e: MouseEvent) {
     e.preventDefault();
@@ -109,6 +114,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     setIndustryDraft(savedIndustry);
     setSellDraft(savedVendor);
     setLangDraft(savedLang);
+    setTypeDraft(savedType);
     EDITING = true;
     setEditing(true);
     setShopMsg(null);
@@ -127,12 +133,14 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
       nameRef.current?.focus();
       return;
     }
+    const accountType = firstFill ? typeDraft : savedType;
     const identity: ShopIdentity = {
       shopName,
       phone: loginTen.length === 10 ? formatInPhone(loginTen) : savedPhone,
-      industry: industryDraft,
-      isVendor: sellDraft,
+      industry: accountType === "individual" ? "" : industryDraft,
+      isVendor: accountType === "individual" ? false : sellDraft,
       language: langDraft || "en-IN",
+      accountType,
     };
     remember(identity);
     setId(identity);
@@ -165,6 +173,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
       industry: industryDraft || savedIndustry,
       isVendor: on,
       language: langDraft || savedLang || "en-IN",
+      accountType: "business",
     };
     remember(identity);
     setId(identity);
@@ -176,7 +185,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
     <div className="rounded-[var(--radius-xl)] border border-line bg-surface p-5" suppressHydrationWarning>
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("yourShop")}</p>
-        {locked ? (
+        {locked && savedType === "business" ? (
           <button
             type="button"
             className="inline-flex h-8 items-center gap-1 rounded-full border border-line bg-surface px-3 text-sm"
@@ -194,18 +203,42 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
           <p className="font-medium">{savedName}</p>
           <p className="text-sm text-muted">{savedPhone || t("noPhone")}</p>
           <p className="mt-1 text-sm text-muted">
-            {savedIndustry ? tradeLabel(savedIndustry) : t("tradeNotSet")}
-            {savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`}
+            {savedType === "individual" ? t("typeIndividual") : t("typeBusiness")}
+            {savedType === "business" && savedIndustry ? ` · ${tradeLabel(savedIndustry)}` : ""}
+            {savedType === "business" ? (savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`) : ` · ${t("asCustomer")}`}
             {` · ${LANGUAGES.find((l) => l.id === savedLang)?.label ?? savedLang}`}
           </p>
           {shopMsg ? <p className="mt-2 text-sm text-ok">{shopMsg}</p> : null}
         </div>
       ) : (
         <div className="mt-3">
-          <label className="block text-xs text-muted">{t("shopName")}</label>
+          {firstFill ? (
+            <>
+          <label className="block text-xs text-muted">{t("accountType")}</label>
+          <select
+            value={typeDraft}
+            onChange={(e) => {
+              const next = e.target.value === "individual" ? "individual" : "business";
+              setTypeDraft(next);
+              if (next === "individual") {
+                setSellDraft(false);
+                setIndustryDraft("");
+              }
+            }}
+            className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm"
+          >
+            <option value="business">{t("typeBusiness")}</option>
+            <option value="individual">{t("typeIndividual")}</option>
+          </select>
+          <label className="mt-3 block text-xs text-muted">{typeDraft === "individual" ? t("fullName") : t("shopName")}</label>
+            </>
+          ) : (
+            <label className="block text-xs text-muted">{savedType === "individual" ? t("fullName") : t("shopName")}</label>
+          )}
           <input
             ref={nameRef}
             value={shopDraft}
+            readOnly={!firstFill}
             onChange={(e) => {
               setShopDraft(e.target.value);
               setShopMsg(null);
@@ -218,6 +251,8 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             value={loginTen.length === 10 ? formatInPhone(loginTen) : savedPhone}
             className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-line bg-bg px-3 text-sm text-muted"
           />
+          {firstFill && typeDraft === "business" ? (
+            <>
           <label className="mt-3 block text-xs text-muted">{t("yourTrade")}</label>
           <select
             value={industryDraft}
@@ -243,6 +278,12 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
               </option>
             ))}
           </select>
+            </>
+          ) : null}
+          {firstFill && typeDraft === "individual" ? (
+            <p className="mt-3 text-xs text-muted">{t("individualHint")}</p>
+          ) : null}
+          {(firstFill && typeDraft === "business") || (!firstFill && savedType === "business") ? (
           <label className="mt-3 flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={sellDraft} onChange={(e) => setSellNow(e.target.checked)} />
             <span>
@@ -250,6 +291,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
               <span className="mt-0.5 block text-xs text-muted">{t("sellOnVaani")}</span>
             </span>
           </label>
+          ) : null}
           {shopMsg ? (
             <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>{shopMsg}</p>
           ) : null}
