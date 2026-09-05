@@ -257,20 +257,12 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
           : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
             ? ((inboxRaw as { result: Array<{ id: string; title: string; body: string; ticketId: string; at?: string }> }).result)
             : [];
-        const cutoff = Date.now() - 20 * 60 * 1000;
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
         for (const n of inbox) {
           if (!String(n.ticketId || "").startsWith("reminder:")) continue;
           const at = n.at ? Date.parse(n.at) : Date.now();
           if (Number.isFinite(at) && at < cutoff) continue;
           if (useVaani.getState().notices.some((row) => row.id === n.id)) continue;
-          let first = true;
-          try {
-            first = localStorage.getItem(`inbox-bell:${n.id}`) !== "1";
-            if (first) localStorage.setItem(`inbox-bell:${n.id}`, "1");
-          } catch {
-            first = true;
-          }
-          if (!first) continue;
           const remId = String(n.ticketId).slice("reminder:".length);
           const hit = listReminders().find((r) => r.id === remId);
           const owner = phoneDigits(hit?.ownerTen || "");
@@ -287,7 +279,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
               audience: useVaani.getState().role,
             },
           ]);
-          playBeep();
+          if (Number.isFinite(at) && Date.now() - at < 2 * 60 * 1000) playBeep();
         }
       } catch {
         /* server due optional */
