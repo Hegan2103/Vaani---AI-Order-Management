@@ -79,6 +79,12 @@ async function ensureVaaniSchema(sql: Sql) {
     )
   `);
   await sql.query(`create index if not exists vaani_inbox_phone_idx on vaani_inbox (phone)`);
+  await sql.query(`
+    create table if not exists vaani_phonebook (
+      phone text primary key,
+      names jsonb not null default '{}'::jsonb
+    )
+  `);
 }
 
 async function createPhoneSession(ten: string) {
@@ -1024,6 +1030,17 @@ export const processDueReminders = createServerFn({ method: "POST" })
     if (ten.length !== 10) return { fired: 0 };
     const sql = await getSql();
     await ensureVaaniSchema(sql);
+    if (book && Object.keys(book).length) {
+      try {
+        await sql.query(
+          `insert into vaani_phonebook (phone, names) values ($1, $2::jsonb)
+           on conflict (phone) do update set names = vaani_phonebook.names || excluded.names`,
+          [ten, JSON.stringify(book)],
+        );
+      } catch {
+        /* optional */
+      }
+    }
     const rows = await sql.query<{ id: string; owner_ten: string; contact_ten: string; payload: unknown; notify_both?: boolean }>(
       `select id, owner_ten, contact_ten, payload from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
       [ten],
@@ -1084,8 +1101,21 @@ export const processDueReminders = createServerFn({ method: "POST" })
       const body = reminder.message || reminder.contactName || "Reminder";
       const ownerTitle = reminder.contactName || "Reminder";
       let contactTitle = "";
-      const bookHit = String(book[ownerPhone] || book[digits(ownerPhone)] || "").trim();
-      if (ten === contactPhone && bookHit) contactTitle = bookHit;
+      try {
+        const saved = await sql.query<{ names: Record<string, string> | string }>(
+          `select names from vaani_phonebook where phone = $1 limit 1`,
+          [contactPhone],
+        );
+        const rawNames = saved[0]?.names;
+        const names = typeof rawNames === "string" ? (JSON.parse(rawNames) as Record<string, string>) : rawNames || {};
+        contactTitle = String(names[ownerPhone] || names[digits(ownerPhone)] || "").trim();
+      } catch {
+        contactTitle = "";
+      }
+      if (!contactTitle) {
+        const bookHit = String(book[ownerPhone] || book[digits(ownerPhone)] || "").trim();
+        if (ten === contactPhone && bookHit) contactTitle = bookHit;
+      }
       if (!contactTitle) {
         try {
           const shops = await sql.query<{ shop_name: string }>(
@@ -1107,7 +1137,7 @@ export const processDueReminders = createServerFn({ method: "POST" })
         await sendPushToPhones([contactPhone], contactTitle, body, "/");
       }
       for (const phone of phones) {
-        const title = phone === ownerPhone ? ownerTitle : ownerTitle;
+        const title = phone === ownerPhone ? ownerTitle : contactTitle;
         const nid = `due-${row.id}-${phone}-${stamp}`;
         await sql.query(
           `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)

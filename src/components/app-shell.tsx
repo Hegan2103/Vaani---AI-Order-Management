@@ -265,9 +265,12 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       for (const r of latestByPair.values()) {
         const targets = reminderTargets(r);
         if (!targets.includes(login)) continue;
-        const dueNow = isReminderDue(r) || dueNowIds.has(r.id);
+        const owner = phoneDigits(r.ownerTen);
+        const contact = phoneDigits(r.contactTen);
+        const isContact = Boolean(r.notifyBoth) && login === contact;
+        const dueNow = isReminderDue(r) || dueNowIds.has(r.id) || (isContact && (r.lastFired || "") === today);
         if (!dueNow) continue;
-        const nid = `bell-${phoneDigits(r.ownerTen)}-${phoneDigits(r.contactTen)}-${login}-${today}`;
+        const nid = `bell-${owner}-${contact}-${login}-${today}`;
         let firstBell = true;
         try {
           firstBell = localStorage.getItem(nid) !== "1";
@@ -277,8 +280,6 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         }
         if (!firstBell) continue;
         if (useVaani.getState().notices.some((n) => n.id === nid || n.id.startsWith(`due-${r.id}-`))) continue;
-        const owner = phoneDigits(r.ownerTen);
-        const contact = phoneDigits(r.contactTen);
         const other = login === owner ? contact : owner;
         const label = bookNameFor(other, r.contactName) || r.contactName || "Reminder";
         pushNotices([
