@@ -222,7 +222,7 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
           <p className="mt-1 text-sm text-muted">
             {savedType === "individual" ? t("typeIndividual") : t("typeBusiness")}
             {savedType === "business" && savedIndustry ? ` · ${tradeLabel(savedIndustry)}` : ""}
-            {savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`}
+            {savedType === "business" ? (savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`) : ""}
           </p>
           {shopMsg ? <p className="mt-2 text-sm text-ok">{shopMsg}</p> : null}
         </div>
@@ -268,6 +268,8 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             {t("loggedMobile")} · {t("frozen")}
           </label>
           <input readOnly value={loginTen.length === 10 ? formatInPhone(loginTen) : savedPhone} className={frozenBox} style={frozenStyle} />
+          {liveType === "business" ? (
+            <>
           <label className="mt-3 block text-xs text-muted">
             {t("yourTrade")}
             {extraFrozen ? ` · ${t("frozen")}` : ""}
@@ -286,20 +288,17 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
               </option>
             ))}
           </select>
-          {liveType === "individual" ? <p className="mt-3 text-xs text-muted">{t("individualHint")}</p> : null}
-          <label
-            className={`mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-line px-3 py-3 text-sm ${sellFrozen ? "cursor-not-allowed" : ""}`}
-            style={sellFrozen ? frozenStyle : undefined}
-          >
-            <input type="checkbox" className="mt-1" checked={sellFrozen ? false : sellDraft} disabled={sellFrozen} onChange={(e) => setSellDraft(e.target.checked)} />
+          <label className="mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-line px-3 py-3 text-sm">
+            <input type="checkbox" className="mt-1" checked={sellDraft} onChange={(e) => setSellDraft(e.target.checked)} />
             <span>
-              <span className="font-medium">
-                {t("sellOnVaaniShort")}
-                {sellFrozen ? ` · ${t("frozen")}` : ""}
-              </span>
+              <span className="font-medium">{t("sellOnVaaniShort")}</span>
               <span className="mt-0.5 block text-xs text-muted">{t("sellOnVaani")}</span>
             </span>
           </label>
+            </>
+          ) : (
+            <p className="mt-3 text-xs text-muted">{t("individualHint")}</p>
+          )}
           {shopMsg ? (
             <p className={`mt-3 text-sm ${shopMsg === t("shopSaved") ? "text-ok" : "text-danger"}`}>{shopMsg}</p>
           ) : null}
