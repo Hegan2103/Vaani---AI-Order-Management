@@ -236,6 +236,12 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         const at = n.at ? Date.parse(n.at) : Date.now();
         if (Number.isFinite(at) && at < cutoff) continue;
         if (useVaani.getState().notices.some((row) => row.id === n.id)) continue;
+        let seen = false;
+        try {
+          seen = (JSON.parse(localStorage.getItem("vaani-bell-seen") || "[]") as string[]).includes(n.id);
+        } catch {
+          seen = false;
+        }
         const remId = String(n.ticketId).slice("reminder:".length);
         const hit = listReminders().find((r) => r.id === remId);
         const owner = phoneDigits(hit?.ownerTen || "");
@@ -249,11 +255,11 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             title,
             body,
             ticketId: n.ticketId,
-            read: false,
+            read: seen,
             audience: useVaani.getState().role,
           },
         ]);
-        if (Number.isFinite(at) && Date.now() - at < 2 * 60 * 1000) playBeep();
+        if (!seen && Number.isFinite(at) && Date.now() - at < 2 * 60 * 1000) playBeep();
       }
     }
     async function tick() {
@@ -448,12 +454,19 @@ function NoticeBell() {
         aria-label={t("notifications")}
         onClick={() => {
           unlockBeep();
+          markNoticesRead();
+          try {
+            const ids = useVaani.getState().notices.map((n) => n.id);
+            const prev = JSON.parse(localStorage.getItem("vaani-bell-seen") || "[]") as string[];
+            localStorage.setItem("vaani-bell-seen", JSON.stringify([...new Set([...prev, ...ids])].slice(-200)));
+          } catch {
+            /* ignore */
+          }
           setOpen((v) => {
             const next = !v;
             if (next) placeBox();
             return next;
           });
-          if (!open) markNoticesRead();
         }}
       >
         <Bell className="size-4" />
