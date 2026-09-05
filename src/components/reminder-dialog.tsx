@@ -64,28 +64,36 @@ function ReminderForm({
   const { t } = useT();
   const ownerTen = liveLoginTen() || readLoginTen();
   const contactTen = phoneDigits(contactPhone);
-  function formKey() {
-    return `vaani-reminder-form:${phoneDigits(ownerTen)}:${phoneDigits(contactTen)}:${notifyBoth ? "vendor" : "customer"}`;
+  function formKeys() {
+    const side = notifyBoth ? "vendor" : "customer";
+    const owner = phoneDigits(liveLoginTen() || readLoginTen() || ownerTen);
+    return [
+      `vaani-reminder-form:${owner}:${contactTen}:${side}`,
+      `vaani-reminder-form:${contactTen}:${side}`,
+    ];
   }
   function writeFormCache(value: Reminder | null) {
-    try {
-      const raw = value ? JSON.stringify({ saved: true, reminder: value }) : JSON.stringify({ saved: false });
-      localStorage.setItem(formKey(), raw);
-      sessionStorage.setItem(formKey(), raw);
-    } catch {
-      /* ignore */
+    const raw = value ? JSON.stringify({ saved: true, reminder: value }) : JSON.stringify({ saved: false });
+    for (const key of formKeys()) {
+      try {
+        localStorage.setItem(key, raw);
+        sessionStorage.setItem(key, raw);
+      } catch {
+        /* ignore */
+      }
     }
   }
   function readFormCache(): Reminder | null | undefined {
     if (typeof window === "undefined" || contactTen.length !== 10) return undefined;
     try {
-      const raw = localStorage.getItem(formKey()) || sessionStorage.getItem(formKey());
-      if (!raw) return undefined;
-      const parsed = JSON.parse(raw) as { saved?: boolean; reminder?: Reminder } & Reminder;
-      if (parsed && parsed.saved === false) return null;
-      const rem = (parsed.reminder || parsed) as Reminder;
-      if (!rem || typeof rem !== "object") return undefined;
-      if (parsed.saved === true || rem.message || rem.time) return rem;
+      for (const key of formKeys()) {
+        const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as { saved?: boolean; reminder?: Reminder } & Reminder;
+        if (parsed && parsed.saved === false) return null;
+        const rem = (parsed.reminder || parsed) as Reminder;
+        if (rem && typeof rem === "object") return rem;
+      }
       return undefined;
     } catch {
       return undefined;
@@ -101,9 +109,9 @@ function ReminderForm({
     return listReminders()
       .filter(
         (r) =>
-          phoneDigits(r.ownerTen) === ownerTen &&
           phoneDigits(r.contactTen) === contactTen &&
-          sameSide(r),
+          sameSide(r) &&
+          (!ownerTen || phoneDigits(r.ownerTen) === ownerTen || !r.ownerTen),
       )
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
   }
@@ -132,51 +140,27 @@ function ReminderForm({
   });
 
   useEffect(() => {
-    let stop = false;
     const cachedNow = readFormCache();
     if (cachedNow === null) {
       setHasSaved(false);
       setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
-    } else if (cachedNow && sameSide(cachedNow)) {
+      return;
+    }
+    const hit = cachedNow && sameSide(cachedNow) ? cachedNow : latestForPair();
+    if (hit && sameSide(hit)) {
       setHasSaved(true);
       setRow({
         ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
-        ...cachedNow,
+        ...hit,
         notifyBoth,
         contactName,
         ownerTen,
         contactTen,
-        time: String(cachedNow.time || "09:00").slice(0, 5),
-        message: String(cachedNow.message || ""),
+        time: String(hit.time || "09:00").slice(0, 5),
+        message: String(hit.message || ""),
       });
-    } else {
-      const hit = latestForPair();
-      if (hit && sameSide(hit)) {
-        setHasSaved(true);
-        setRow({
-          ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
-          ...hit,
-          notifyBoth,
-          contactName,
-          ownerTen,
-          contactTen,
-          time: String(hit.time || "09:00").slice(0, 5),
-          message: String(hit.message || ""),
-        });
-      }
     }
-    void listRemindersRemote({ data: { phone: ownerTen } })
-      .then((remote) => {
-        if (stop) return;
-        const rows = Array.isArray(remote) ? remote : [];
-        if (rows.length) mergeReminders(rows as Reminder[]);
-        if (readFormCache() === null) return;
-      })
-      .catch(() => undefined);
-    return () => {
-      stop = true;
-    };
-  }, [ownerTen, contactTen]);
+  }, [ownerTen, contactTen, notifyBoth, contactName]);
 
   function patch(part: Partial<Reminder>) {
     setRow((r) => ({ ...r, ...part, notifyBoth }));
