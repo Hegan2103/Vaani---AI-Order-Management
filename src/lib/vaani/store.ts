@@ -666,6 +666,7 @@ type State = {
   customerName: string;
   customerPhone: string;
   industry: Industry | "";
+  accountType: "business" | "individual";
   isVendor: boolean;
   language: string;
   shopSaved: boolean;
@@ -901,6 +902,7 @@ export const useVaani = create<State>()(
       customerName: "",
       customerPhone: "",
       industry: "",
+      accountType: "business",
       isVendor: false,
       language: "en-IN",
       shopSaved: false,
@@ -958,6 +960,7 @@ export const useVaani = create<State>()(
           customerName: shopName,
           customerPhone: phone,
           industry,
+          accountType,
           isVendor,
           language,
           shopSaved: true,
@@ -1116,6 +1119,7 @@ export const useVaani = create<State>()(
         customerName: s.customerName,
         customerPhone: s.customerPhone,
         industry: s.industry,
+        accountType: s.accountType || "business",
         isVendor: s.isVendor,
         language: s.language,
         shopSaved: s.shopSaved || Boolean(s.customerName.trim()),
@@ -1309,6 +1313,7 @@ export function clearLocalVaani() {
     customerName: "",
     customerPhone: "",
     industry: "",
+    accountType: "business" as const,
     isVendor: false,
     shopSaved: false,
     claimedVendorId: "",

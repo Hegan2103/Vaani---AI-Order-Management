@@ -15,13 +15,19 @@ function remember(p: Partial<ShopIdentity> | null | undefined, ten?: string) {
   const login = phoneDigits(ten || liveLoginTen() || readLoginTen() || p?.phone || "");
   const shopName = (p?.shopName || "").trim();
   if (!shopName || login.length !== 10) return LOCKED;
+  const accountType =
+    p?.accountType === "individual" || p?.accountType === "business"
+      ? p.accountType
+      : LOCKED?.accountType === "individual"
+        ? "individual"
+        : "business";
   LOCKED = {
     shopName,
     phone: formatInPhone(login),
-    industry: p?.accountType === "individual" ? "" : p?.industry || "",
-    isVendor: p?.accountType === "individual" ? false : Boolean(p?.isVendor),
+    industry: accountType === "individual" ? "" : p?.industry || "",
+    isVendor: accountType === "individual" ? false : Boolean(p?.isVendor),
     language: p?.language || "en-IN",
-    accountType: p?.accountType === "individual" ? "individual" : "business",
+    accountType,
   };
   try {
     sessionStorage.setItem(`${PIN_KEY}:${login}`, JSON.stringify(LOCKED));
@@ -56,6 +62,7 @@ function pullIdentity() {
         industry: s.industry,
         isVendor: s.isVendor,
         language: s.language,
+        accountType: s.accountType === "individual" ? "individual" : "business",
       },
       ten,
     );
