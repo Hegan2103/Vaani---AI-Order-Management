@@ -133,45 +133,44 @@ function ReminderForm({
 
   useEffect(() => {
     let stop = false;
+    const cachedNow = readFormCache();
+    if (cachedNow === null) {
+      setHasSaved(false);
+      setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
+    } else if (cachedNow && sameSide(cachedNow)) {
+      setHasSaved(true);
+      setRow({
+        ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
+        ...cachedNow,
+        notifyBoth,
+        contactName,
+        ownerTen,
+        contactTen,
+        time: String(cachedNow.time || "09:00").slice(0, 5),
+        message: String(cachedNow.message || ""),
+      });
+    } else {
+      const hit = latestForPair();
+      if (hit && sameSide(hit)) {
+        setHasSaved(true);
+        setRow({
+          ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
+          ...hit,
+          notifyBoth,
+          contactName,
+          ownerTen,
+          contactTen,
+          time: String(hit.time || "09:00").slice(0, 5),
+          message: String(hit.message || ""),
+        });
+      }
+    }
     void listRemindersRemote({ data: { phone: ownerTen } })
       .then((remote) => {
         if (stop) return;
         const rows = Array.isArray(remote) ? remote : [];
         if (rows.length) mergeReminders(rows as Reminder[]);
-        const cached = readFormCache();
-        if (cached === null) {
-          setHasSaved(false);
-          setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
-          return;
-        }
-        if (cached && sameSide(cached)) {
-          setHasSaved(true);
-          setRow({
-            ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
-            ...cached,
-            notifyBoth,
-            contactName,
-            ownerTen,
-            contactTen,
-            time: String(cached.time || "09:00").slice(0, 5),
-            message: String(cached.message || ""),
-          });
-          return;
-        }
-        const hit = latestForPair();
-        if (hit && sameSide(hit) && (hit.message || hit.time)) {
-          setHasSaved(true);
-          setRow({
-            ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
-            ...hit,
-            notifyBoth,
-            contactName,
-            ownerTen,
-            contactTen,
-            time: String(hit.time || "09:00").slice(0, 5),
-            message: String(hit.message || ""),
-          });
-        }
+        if (readFormCache() === null) return;
       })
       .catch(() => undefined);
     return () => {
