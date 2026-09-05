@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { BookUser, Mic, Phone, Trash2 } from "lucide-react";
+import { BookUser, Mic, Pencil, Phone, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { StatusPill } from "@/components/status-pill";
 import {
@@ -432,6 +432,27 @@ export function CustomerHome() {
                         const phone = vend?.phone || row.vendorPhone || "";
                         return (
                           <li key={row.id} className="flex items-center gap-2">
+                            {row.status === "draft" ? (
+                              <button
+                                type="button"
+                                className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-line bg-surface px-4 py-4 text-left"
+                                onClick={() => {
+                                  setCallVendorId(row.vendorId);
+                                  void navigate({ to: "/" });
+                                }}
+                              >
+                             <div className="min-w-0">
+                                <p className="truncate font-medium">{title}</p>
+                                <p className="truncate text-xs text-muted">
+                                  {t("linesCount", { n: row.lines.length })}
+                                  {phone ? ` · ${phone}` : ""}
+                                  {" · "}
+                                  {new Date(row.createdAt).toLocaleString(locale)}
+                                </p>
+                              </div>
+                              <StatusPill status={row.status} />
+                              </button>
+                            ) : (
                             <Link
                               to="/ticket/$ticketId"
                               params={{ ticketId: row.id }}
@@ -449,7 +470,20 @@ export function CustomerHome() {
                               </div>
                               <StatusPill status={row.status} />
                             </Link>
+                            )}
                             {row.status === "draft" ? (
+                              <>
+                              <button
+                                type="button"
+                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface"
+                                aria-label={t("edit")}
+                                onClick={() => {
+                                  setCallVendorId(row.vendorId);
+                                  void navigate({ to: "/" });
+                                }}
+                              >
+                                <Pencil className="size-4" />
+                              </button>
                               <button
                                 type="button"
                                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-danger"
@@ -462,6 +496,7 @@ export function CustomerHome() {
                               >
                                 <Trash2 className="size-4" />
                               </button>
+                              </>
                             ) : null}
                           </li>
                         );

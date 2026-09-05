@@ -45,6 +45,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
   const speechRef = useRef<{ stop: () => void } | null>(null);
   const liveRef = useRef("");
   const transcriptRef = useRef("");
+  const linesRef = useRef<LineItem[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef(0);
   const vendorRef = useRef(found);
@@ -84,11 +85,21 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
   useEffect(() => {
     const vendor = vendorRef.current;
     if (!vendor) return;
-    const draft = useVaani.getState().tickets.find((t) => t.vendorId === vendor.id && t.status === "draft");
+    const vendorTen = phoneDigits(vendor.phone) || String(vendor.id).match(/(\d{10})/)?.[1] || "";
+    const vid = vendorTen.length === 10 ? inboxIdForUser(`vaani-${vendorTen}`) : vendor.id;
+    const draft = useVaani.getState().tickets.find(
+      (t) =>
+        t.status === "draft" &&
+        (t.id === draftIdRef.current ||
+          t.vendorId === vendor.id ||
+          t.vendorId === vid ||
+          phoneDigits(t.vendorPhone) === vendorTen),
+    );
     if (!draft?.lines.length) return;
     draftIdRef.current = draft.id;
+    linesRef.current = draft.lines;
     setLines(draft.lines);
-    setTranscript(draft.transcript);
+    setTranscript("");
     transcriptRef.current = draft.transcript;
     setPhase("review");
   }, [vendorId]);
@@ -96,6 +107,7 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
   useEffect(() => {
     if (phase !== "review" || !lines.length) return;
     persistDraft(lines, transcriptRef.current || transcript);
+    linesRef.current = lines;
   }, [lines, phase, transcript]);
 
   async function startRec() {
@@ -198,12 +210,16 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
 
     const spoken = (typed ?? liveRef.current ?? transcriptRef.current).trim();
     const localLines = spoken ? fallbackParse(spoken) : [];
+    const prior = linesRef.current.length ? linesRef.current : lines;
+    const merged = prior.length ? [...prior, ...localLines] : localLines;
+    const combined = [transcriptRef.current, spoken].filter((s, i, a) => s && a.indexOf(s) === i).join("\n").trim() || spoken;
     if (localLines.length) {
-      setTranscript(spoken);
-      transcriptRef.current = spoken;
-      setLines(localLines);
+      setTranscript("");
+      transcriptRef.current = combined;
+      linesRef.current = merged;
+      setLines(merged);
       setPhase("review");
-      persistDraft(localLines, spoken);
+      persistDraft(merged, combined);
       queueMicrotask(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
     try {
@@ -216,22 +232,26 @@ export function CallScreen({ vendorId }: { vendorId: string }) {
           language: language || "en-IN",
         },
       });
+      if (localLines.length) {
+        if (!result.ok) setWarning(result.error);
+        return;
+      }
       if (!result.ok) {
-        if (localLines.length) {
-          setWarning(result.error);
-          return;
-        }
         setError(result.error);
         setPhase("idle");
         return;
       }
       const text = spoken || result.transcript;
-      setTranscript(text);
-      transcriptRef.current = text;
-      setLines(fallbackParse(text));
+      const extra = fallbackParse(text);
+      const next = linesRef.current.length ? [...linesRef.current, ...extra] : extra;
+      const combinedText = [transcriptRef.current, text].filter(Boolean).join("\n");
+      transcriptRef.current = combinedText;
+      setTranscript("");
+      linesRef.current = next;
+      setLines(next);
       setWarning("warning" in result ? (result.warning ?? null) : null);
       setPhase("review");
-      persistDraft(fallbackParse(text), text);
+      persistDraft(next, combinedText);
       queueMicrotask(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (err) {
       if (localLines.length) {
