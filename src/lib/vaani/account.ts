@@ -1042,7 +1042,7 @@ export const processDueReminders = createServerFn({ method: "POST" })
       }
     }
     const rows = await sql.query<{ id: string; owner_ten: string; contact_ten: string; payload: unknown; notify_both?: boolean }>(
-      `select id, owner_ten, contact_ten, payload from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
+      `select id, owner_ten, contact_ten, payload, notify_both from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
       [ten],
     );
     const { sendPushToPhones } = await import("./push-server");
@@ -1081,7 +1081,13 @@ export const processDueReminders = createServerFn({ method: "POST" })
         date: String(raw.date || ""),
         from: String(raw.from || ""),
         to: String(raw.to || ""),
-        notifyBoth: raw.notifyBoth === true,
+        notifyBoth:
+          raw.notifyBoth === true ||
+          raw.notifyBoth === "true" ||
+          row.notify_both === true ||
+          row.notify_both === "t" ||
+          row.notify_both === "true" ||
+          row.notify_both === 1,
         contactName: String(raw.contactName || "Reminder"),
         message: String(raw.message || ""),
         ownerTen: digits(String(raw.ownerTen || row.owner_ten)),
@@ -1132,19 +1138,31 @@ export const processDueReminders = createServerFn({ method: "POST" })
       const phones = reminder.notifyBoth
         ? [ownerPhone, contactPhone].filter((p) => p.length === 10)
         : [ownerPhone].filter((p) => p.length === 10);
-      await sendPushToPhones([ownerPhone].filter((p) => p.length === 10), ownerTitle, body, "/");
-      if (reminder.notifyBoth && contactPhone.length === 10) {
-        await sendPushToPhones([contactPhone], contactTitle, body, "/");
-      }
       for (const phone of phones) {
         const title = phone === ownerPhone ? ownerTitle : contactTitle;
         const nid = `due-${row.id}-${phone}-${stamp}`;
-        await sql.query(
-          `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)
-           on conflict (id) do nothing`,
-          [nid, phone, title, body, `reminder:${row.id}`],
-        );
+        try {
+          await sql.query(
+            `insert into vaani_inbox (id, phone, title, body, ticket_id) values ($1, $2, $3, $4, $5)
+             on conflict (id) do nothing`,
+            [nid, phone, title, body, `reminder:${row.id}`],
+          );
+        } catch {
+          /* inbox optional */
+        }
         if (phone === ten) notices.push({ id: nid, title, body, ticketId: `reminder:${row.id}` });
+      }
+      try {
+        await sendPushToPhones([ownerPhone].filter((p) => p.length === 10), ownerTitle, body, "/");
+      } catch {
+        /* owner push optional */
+      }
+      if (reminder.notifyBoth && contactPhone.length === 10) {
+        try {
+          await sendPushToPhones([contactPhone], contactTitle, body, "/");
+        } catch {
+          /* contact push optional */
+        }
       }
       fired += 1;
     }

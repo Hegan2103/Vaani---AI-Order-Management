@@ -252,7 +252,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
           : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
             ? ((inboxRaw as { result: Array<{ id: string; title: string; body: string; ticketId: string; at?: string }> }).result)
             : [];
-        const cutoff = Date.now() - 4 * 60 * 1000;
+        const cutoff = Date.now() - 20 * 60 * 1000;
         for (const n of inbox) {
           if (!String(n.ticketId || "").startsWith("reminder:")) continue;
           const at = n.at ? Date.parse(n.at) : Date.now();
