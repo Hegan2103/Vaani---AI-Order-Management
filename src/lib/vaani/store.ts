@@ -72,15 +72,18 @@ export function loginPhoneKey() {
 export function writeDirContacts(rows: Contact[]) {
   if (typeof window === "undefined") return;
   const raw = JSON.stringify(rows);
+  const owner = liveLoginTen() || readLoginTen();
+  const flag = owner.length === 10 ? `${DIR_FLAG}:${owner}` : DIR_FLAG;
+  const key = owner.length === 10 ? `${DIR_KEY}:${owner}` : DIR_KEY;
   try {
-    sessionStorage.setItem(DIR_FLAG, "1");
-    sessionStorage.setItem(DIR_KEY, raw);
+    sessionStorage.setItem(flag, "1");
+    sessionStorage.setItem(key, raw);
   } catch {
     /* ignore */
   }
   try {
-    localStorage.setItem(DIR_FLAG, "1");
-    localStorage.setItem(DIR_KEY, raw);
+    localStorage.setItem(flag, "1");
+    localStorage.setItem(key, raw);
   } catch {
     /* ignore */
   }
@@ -155,11 +158,10 @@ export function directoryRows(meTen = ""): Contact[] {
   };
   for (const c of readDirContacts() || []) ingest(c);
   try {
-    for (const c of useVaani.getState().contacts) ingest(c);
+    for (const c of useVaani.getState().contacts ?? []) ingest(c);
   } catch {
     /* store not ready */
   }
-  for (const [ten, name] of Object.entries(names)) ingest({ id: `book-${ten}`, name, phone: ten, source: "phone" });
   writeBookNames(names);
   return [...map.values()];
 }
@@ -167,8 +169,11 @@ export function directoryRows(meTen = ""): Contact[] {
 export function readDirContacts(): Contact[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const flag = sessionStorage.getItem(DIR_FLAG) || localStorage.getItem(DIR_FLAG);
-    const raw = sessionStorage.getItem(DIR_KEY) || localStorage.getItem(DIR_KEY);
+    const owner = liveLoginTen() || readLoginTen();
+    const flagKey = owner.length === 10 ? `${DIR_FLAG}:${owner}` : DIR_FLAG;
+    const dataKey = owner.length === 10 ? `${DIR_KEY}:${owner}` : DIR_KEY;
+    const flag = sessionStorage.getItem(flagKey) || localStorage.getItem(flagKey);
+    const raw = sessionStorage.getItem(dataKey) || localStorage.getItem(dataKey);
     if (flag !== "1" && !raw) return null;
     if (!raw) return [];
     const rows = JSON.parse(raw) as Contact[];
@@ -923,7 +928,21 @@ export const useVaani = create<State>()(
       resetForUser: (userId) =>
         set((s) => {
           if (s.accountUserId === userId) return s;
-          return { accountUserId: userId, accountReady: false };
+          return {
+            accountUserId: userId,
+            accountReady: false,
+            tickets: [],
+            incoming: [],
+            contacts: [],
+            notices: [],
+            customerName: "",
+            customerPhone: "",
+            industry: "",
+            accountType: "business" as const,
+            isVendor: false,
+            shopSaved: false,
+            claimedVendorId: "",
+          };
         }),
       setRole: (role) => set({ role }),
       setProfile: (customerName, customerPhone) =>

@@ -125,6 +125,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
     }
     if (ten.length === 10) {
       rememberLoginTen(ten);
+      useVaani.getState().resetForUser(`vaani-${ten}`);
       restoreLocalAccount(ten);
       applyDirContacts();
     }
