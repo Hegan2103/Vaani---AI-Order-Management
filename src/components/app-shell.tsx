@@ -246,6 +246,11 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             ? ((again as { result: Reminder[] }).result)
             : [];
         if (againRows.length) mergeReminders(againRows as Reminder[]);
+      } catch {
+        /* process due optional */
+      }
+      try {
+        const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
         const inboxRaw = await listInboxNotices({ data: { phone: login } });
         const inbox = Array.isArray(inboxRaw)
           ? inboxRaw

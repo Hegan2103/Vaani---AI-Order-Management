@@ -1014,7 +1014,7 @@ function reminderIsDue(row: { lastFired?: string; time?: string; repeat?: string
   const [h, m] = String(row.time || "09:00").split(":").map((n) => Number(n));
   const atMin = (h || 0) * 60 + (m || 0);
   if (now.minutes < atMin) return false;
-  if (now.minutes > atMin + 1) return false;
+  if (now.minutes > atMin + 5) return false;
   if (row.repeat === "weekly") return now.day === (row.weekday ?? 1);
   if (row.repeat === "once") return (row.date || "") === now.stamp;
   if (row.repeat === "range") return now.stamp >= (row.from || now.stamp) && now.stamp <= (row.to || now.stamp);
@@ -1041,10 +1041,18 @@ export const processDueReminders = createServerFn({ method: "POST" })
         /* optional */
       }
     }
-    const rows = await sql.query<{ id: string; owner_ten: string; contact_ten: string; payload: unknown; notify_both?: boolean }>(
-      `select id, owner_ten, contact_ten, payload, notify_both from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
-      [ten],
-    );
+    let rows: { id: string; owner_ten: string; contact_ten: string; payload: unknown; notify_both?: boolean }[] = [];
+    try {
+      rows = await sql.query(
+        `select id, owner_ten, contact_ten, payload, notify_both from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
+        [ten],
+      );
+    } catch {
+      rows = await sql.query(
+        `select id, owner_ten, contact_ten, payload from vaani_reminders where owner_ten = $1 or contact_ten = $1`,
+        [ten],
+      );
+    }
     const { sendPushToPhones } = await import("./push-server");
     let fired = 0;
     const notices: { id: string; title: string; body: string; ticketId: string }[] = [];
