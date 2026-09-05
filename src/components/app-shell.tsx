@@ -241,12 +241,13 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
         const owner = phoneDigits(hit?.ownerTen || "");
         const other = login === owner ? phoneDigits(hit?.contactTen || "") : owner;
         const title = bookNameFor(other, n.title) || n.title || "Reminder";
+        const body = String(hit?.message || n.body || "").trim() || title;
         pushNotices([
           {
             id: n.id,
             at: n.at || new Date().toISOString(),
             title,
-            body: n.body || title,
+            body,
             ticketId: n.ticketId,
             read: false,
             audience: useVaani.getState().role,
@@ -410,6 +411,7 @@ function NoticeBell() {
     return false;
   });
   const unread = visible.filter((n) => !n.read).length;
+  const ordered = [...visible].sort((a, b) => Date.parse(b.at || "") - Date.parse(a.at || ""));
 
   function placeBox() {
     const r = btnRef.current?.getBoundingClientRect();
@@ -465,7 +467,7 @@ function NoticeBell() {
             <p className="px-3 py-6 text-sm text-muted">{t("noEvents")}</p>
           ) : (
             <ul className="max-h-80 overflow-auto">
-              {visible.map((n) => (
+              {ordered.map((n) => (
                 <li key={n.id}>
                   <button
                     type="button"
@@ -482,7 +484,12 @@ function NoticeBell() {
                     <p className="text-sm font-medium">{n.title}</p>
                     <p className="text-xs text-muted">{n.body}</p>
                     <p className="text-[10px] text-subtle">
-                      {new Date(n.at).toLocaleTimeString(useVaani.getState().language || "en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(n.at).toLocaleString(useVaani.getState().language || "en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </p>
                   </button>
                 </li>
