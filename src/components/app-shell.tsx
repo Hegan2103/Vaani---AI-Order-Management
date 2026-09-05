@@ -155,6 +155,7 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
           industry: s.industry,
           isVendor: s.isVendor,
           language: s.language || "en-IN",
+          accountType: s.accountType === "individual" ? "individual" : "business",
         });
       }
       writeAccountBackup();

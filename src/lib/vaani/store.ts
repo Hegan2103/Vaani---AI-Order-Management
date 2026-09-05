@@ -287,7 +287,7 @@ export function writeAccountBackup() {
   try {
     const s = useVaani.getState();
     const ten = phoneDigits(s.customerPhone) || readLoginTen();
-    if (!s.customerName.trim() && !s.tickets.length && !s.incoming.length) return;
+    if (!s.customerName.trim() && !(s.tickets ?? []).length && !(s.incoming ?? []).length) return;
     const payload: AccountBackup = {
       shopName: s.customerName,
       phone: s.customerPhone,
@@ -295,8 +295,8 @@ export function writeAccountBackup() {
       isVendor: s.isVendor,
       language: s.language,
       claimedVendorId: s.claimedVendorId,
-      tickets: s.tickets,
-      incoming: s.incoming,
+      tickets: s.tickets ?? [],
+      incoming: s.incoming ?? [],
     };
     const all = JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}") as Record<string, AccountBackup>;
     if (ten.length === 10) {
@@ -354,6 +354,7 @@ export function readPersistedShop(): ShopIdentity | null {
       industry: (s.industry as ShopIdentity["industry"]) || "",
       isVendor: Boolean(s.isVendor),
       language: s.language || "en-IN",
+      accountType: (s as { accountType?: string }).accountType === "individual" ? "individual" : "business",
     };
   } catch {
     return null;
@@ -645,6 +646,7 @@ const prevTen = phoneDigits(s.customerPhone);
       industry,
       isVendor,
       language,
+      accountType: shop?.accountType === "individual" ? "individual" : "business",
     });
     writeShopCookies({ shopName, phone: formatted, industry, isVendor, language });
   } else if (ten.length === 10 && phoneDigits(s.customerPhone) !== ten) {
@@ -939,7 +941,12 @@ export const useVaani = create<State>()(
         const shopName = p.shopName.trim() || s.customerName;
         const phone = p.phone.trim() || s.customerPhone;
         const language = p.language || s.language || readUiLanguage() || "en-IN";
-        const accountType = p.accountType === "individual" ? "individual" : "business";
+        const accountType =
+          p.accountType === "individual" || p.accountType === "business"
+            ? p.accountType
+            : s.accountType === "individual"
+              ? "individual"
+              : "business";
         const industry = accountType === "individual" ? "" : p.industry || s.industry || "";
         const isVendor = accountType === "individual" ? false : Boolean(p.isVendor);
         if (
@@ -1102,6 +1109,10 @@ export const useVaani = create<State>()(
           customerName: name,
           customerPhone: phone,
           industry: current.industry || p.industry || disk?.industry || "",
+          accountType:
+            current.accountType === "individual" || p.accountType === "individual" || disk?.accountType === "individual"
+              ? "individual"
+              : "business",
           isVendor: Boolean(current.isVendor || p.isVendor || disk?.isVendor),
           language: current.language || p.language || disk?.language || readUiLanguage() || "en-IN",
           shopSaved: Boolean(current.shopSaved || p.shopSaved || name),

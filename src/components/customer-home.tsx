@@ -444,7 +444,7 @@ export function CustomerHome() {
                              <div className="min-w-0">
                                 <p className="truncate font-medium">{title}</p>
                                 <p className="truncate text-xs text-muted">
-                                  {t("linesCount", { n: row.lines.length })}
+                                  {t("linesCount", { n: row.lines?.length || 0 })}
                                   {phone ? ` · ${phone}` : ""}
                                   {" · "}
                                   {new Date(row.createdAt).toLocaleString(locale)}
@@ -462,7 +462,7 @@ export function CustomerHome() {
                              <div className="min-w-0">
                                 <p className="truncate font-medium">{title}</p>
                                 <p className="truncate text-xs text-muted">
-                                  {t("linesCount", { n: row.lines.length })}
+                                  {t("linesCount", { n: row.lines?.length || 0 })}
                                   {phone ? ` · ${phone}` : ""}
                                   {" · "}
                                   {new Date(row.createdAt).toLocaleString(locale)}
