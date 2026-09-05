@@ -236,12 +236,6 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
       } catch {
         /* local reminders */
       }
-      const loginEarly = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-      const dueNowIds = new Set(
-        listReminders()
-          .filter((r) => reminderTargets(r).includes(loginEarly) && isReminderDue(r))
-          .map((r) => r.id),
-      );
       try {
         const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
         await processDueReminders({ data: { phone: login, book: readBookNames() } });
@@ -252,51 +246,46 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
             ? ((again as { result: Reminder[] }).result)
             : [];
         if (againRows.length) mergeReminders(againRows as Reminder[]);
+        const inboxRaw = await listInboxNotices({ data: { phone: login } });
+        const inbox = Array.isArray(inboxRaw)
+          ? inboxRaw
+          : inboxRaw && typeof inboxRaw === "object" && Array.isArray((inboxRaw as { result?: unknown }).result)
+            ? ((inboxRaw as { result: Array<{ id: string; title: string; body: string; ticketId: string; at?: string }> }).result)
+            : [];
+        const cutoff = Date.now() - 4 * 60 * 1000;
+        for (const n of inbox) {
+          if (!String(n.ticketId || "").startsWith("reminder:")) continue;
+          const at = n.at ? Date.parse(n.at) : Date.now();
+          if (Number.isFinite(at) && at < cutoff) continue;
+          if (useVaani.getState().notices.some((row) => row.id === n.id)) continue;
+          let first = true;
+          try {
+            first = localStorage.getItem(`inbox-bell:${n.id}`) !== "1";
+            if (first) localStorage.setItem(`inbox-bell:${n.id}`, "1");
+          } catch {
+            first = true;
+          }
+          if (!first) continue;
+          const remId = String(n.ticketId).slice("reminder:".length);
+          const hit = listReminders().find((r) => r.id === remId);
+          const owner = phoneDigits(hit?.ownerTen || "");
+          const other = login === owner ? phoneDigits(hit?.contactTen || "") : owner;
+          const title = bookNameFor(other, n.title) || n.title || "Reminder";
+          pushNotices([
+            {
+              id: n.id,
+              at: n.at || new Date().toISOString(),
+              title,
+              body: n.body || title,
+              ticketId: n.ticketId,
+              read: false,
+              audience: useVaani.getState().role,
+            },
+          ]);
+          playBeep();
+        }
       } catch {
         /* server due optional */
-      }
-      const login = liveLoginTen() || readLoginTen() || phoneDigits(useVaani.getState().customerPhone) || me;
-      const today = new Date().toLocaleString("en-CA", { timeZone: "Asia/Kolkata" }).slice(0, 10);
-      const latestByPair = new Map<string, Reminder>();
-      for (const r of listReminders()) {
-        const key = `${phoneDigits(r.ownerTen)}:${phoneDigits(r.contactTen)}`;
-        const prev = latestByPair.get(key);
-        if (!prev || String(r.createdAt || "") > String(prev.createdAt || "")) latestByPair.set(key, r);
-      }
-      for (const r of latestByPair.values()) {
-        const targets = reminderTargets(r);
-        if (!targets.includes(login)) continue;
-        const owner = phoneDigits(r.ownerTen);
-        const contact = phoneDigits(r.contactTen);
-        const dueNow =
-          isReminderDue(r) ||
-          dueNowIds.has(r.id) ||
-          ((r.lastFired || "") === today && reminderTimeIsNow(r));
-        if (!dueNow) continue;
-        const nid = `bell-${owner}-${contact}-${login}-${today}`;
-        let firstBell = true;
-        try {
-          firstBell = localStorage.getItem(nid) !== "1";
-          if (firstBell) localStorage.setItem(nid, "1");
-        } catch {
-          firstBell = true;
-        }
-        if (!firstBell) continue;
-        if (useVaani.getState().notices.some((n) => n.id === nid || n.id.startsWith(`due-${r.id}-`))) continue;
-        const other = login === owner ? contact : owner;
-        const label = bookNameFor(other, r.contactName) || r.contactName || "Reminder";
-        pushNotices([
-          {
-            id: nid,
-            at: new Date().toISOString(),
-            title: label,
-            body: r.message || label,
-            ticketId: `reminder:${r.id}`,
-            read: false,
-            audience: useVaani.getState().role,
-          },
-        ]);
-        playBeep();
       }
     }
     void tick();
