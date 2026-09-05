@@ -19,17 +19,31 @@ function nameFromChunk(chunk: string, _quantity: number | null, qtyText?: string
 
 function parseChunk(chunk: string): LineItem {
   const kind = inferKind(chunk);
-  const qtyMatch = chunk.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\b`, "i"));
-  const trailingQty = chunk.match(/(\d+(?:\.\d+)?)\s*$/);
+  const weightMatch = chunk.match(/(\d+(?:\.\d+)?)\s*(kgs?|kilos?|kilograms?|gms?|grams?)\b/i);
+  const afterWeight = weightMatch
+    ? chunk.slice((weightMatch.index || 0) + weightMatch[0].length)
+    : "";
+  const afterQty = afterWeight.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})?\\b`, "i"));
+  const hasWeightThenQty = Boolean(weightMatch && afterQty?.[1]);
+  const qtyMatch = hasWeightThenQty
+    ? afterQty
+    : chunk.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\b`, "i"));
+  const trailingQty = hasWeightThenQty ? null : chunk.match(/(\d+(?:\.\d+)?)\s*$/);
   const keepStrength = /\d+\s*(mg|ml)\b/i.test(chunk);
-  const quantity = qtyMatch
-    ? Number(qtyMatch[1])
-    : trailingQty && !keepStrength
-      ? Number(trailingQty[1])
-      : kind === "inquiry"
-        ? null
-        : 1;
-  const unitRaw = (qtyMatch?.[2] || "unit").toLowerCase();
+  const quantity = hasWeightThenQty
+    ? Number(afterQty?.[1])
+    : qtyMatch
+      ? Number(qtyMatch[1])
+      : trailingQty && !keepStrength
+        ? Number(trailingQty[1])
+        : kind === "inquiry"
+          ? null
+          : 1;
+  const unitRaw = (
+    hasWeightThenQty
+      ? afterQty?.[2] || "unit"
+      : qtyMatch?.[2] || "unit"
+  ).toLowerCase();
   const unit =
     unitRaw === "cases" || unitRaw === "केस" || unitRaw === "carton" || unitRaw === "cartons"
       ? "case"
@@ -46,7 +60,9 @@ function parseChunk(chunk: string): LineItem {
                 : unitRaw === "pcs" || unitRaw === "pc"
                   ? "piece"
                   : unitRaw;
-  const qtyText = qtyMatch?.[0] || (trailingQty && quantity === Number(trailingQty[1]) ? trailingQty[0] : "");
+  const qtyText = hasWeightThenQty
+    ? afterQty?.[0] || ""
+    : qtyMatch?.[0] || (trailingQty && quantity === Number(trailingQty[1]) ? trailingQty[0] : "");
   return {
     id: crypto.randomUUID(),
     kind,
