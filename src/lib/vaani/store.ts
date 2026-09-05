@@ -937,9 +937,10 @@ export const useVaani = create<State>()(
           };
         }),
       setShopIdentity: (p) => {
+        try {
         const s = useVaani.getState();
-        const shopName = p.shopName.trim() || s.customerName;
-        const phone = p.phone.trim() || s.customerPhone;
+        const shopName = (p.shopName || "").trim() || s.customerName;
+        const phone = (p.phone || "").trim() || s.customerPhone;
         const language = p.language || s.language || readUiLanguage() || "en-IN";
         const accountType =
           p.accountType === "individual" || p.accountType === "business"
@@ -953,6 +954,7 @@ export const useVaani = create<State>()(
           s.customerName === shopName &&
           s.customerPhone === phone &&
           s.industry === industry &&
+          s.accountType === accountType &&
           s.isVendor === isVendor &&
           s.language === language &&
           s.shopSaved === (shopName.length > 0)
@@ -962,7 +964,6 @@ export const useVaani = create<State>()(
         if (!shopName) return;
         writeShopIdentity({ shopName, phone, industry, isVendor, language, accountType });
         if (isVendor) rememberListedVendor({ shopName, phone, industry });
-        else forgetListedVendor(phoneDigits(phone));
         set({
           customerName: shopName,
           customerPhone: phone,
@@ -973,6 +974,18 @@ export const useVaani = create<State>()(
           shopSaved: true,
         });
         queueMicrotask(() => writeAccountBackup());
+        } catch {
+          const name = (p.shopName || "").trim();
+          if (name) {
+            set({
+              customerName: name,
+              customerPhone: p.phone || "",
+              accountType: p.accountType === "individual" ? "individual" : "business",
+              isVendor: p.accountType === "individual" ? false : Boolean(p.isVendor),
+              shopSaved: true,
+            });
+          }
+        }
       },
       setLanguage: (language) =>
         set((s) => {

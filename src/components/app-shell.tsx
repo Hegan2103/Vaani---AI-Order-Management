@@ -396,10 +396,10 @@ export function AppShell({ children, seedPhone }: { children: ReactNode; seedPho
 }
 
 function NoticeBell() {
-  const notices = useVaani((s) => s.notices);
+  const notices = useVaani((s) => s.notices) ?? [];
   const markNoticesRead = useVaani((s) => s.markNoticesRead);
-  const tickets = useVaani((s) => s.tickets);
-  const incoming = useVaani((s) => s.incoming);
+  const tickets = useVaani((s) => s.tickets) ?? [];
+  const incoming = useVaani((s) => s.incoming) ?? [];
   const { t } = useT();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);

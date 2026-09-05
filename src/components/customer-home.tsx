@@ -315,7 +315,7 @@ export function CustomerHome() {
           const buyerOnly = ten.length === 10 && ten !== meTen && !selling && isListedBuyer(c.phone);
           const trade = found?.industry && found.shop && !/^Shop \d{10}$/.test(found.shop) ? found.industry : undefined;
           const v =
-            selling && ten.length === 10 && ten !== meTen
+            selling && ten.length === 10 && ten !== meTen && found
               ? {
                   id: found.id || `u-vaani-${ten}`,
                   name: (found.shop || found.name || c.name || "").trim() || `Shop ${ten}`,
@@ -353,7 +353,7 @@ export function CustomerHome() {
                     const ten = readLoginTen();
                     if (ten.length === 10) rememberLoginTen(ten);
                     keepSession();
-                    const live = useVaani.getState().liveVendors;
+                    const live = useVaani.getState().liveVendors ?? [];
                     if (!live.some((row) => row.id === v.id)) {
                       setLiveVendors([...live, v]);
                     }
