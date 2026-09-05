@@ -78,26 +78,27 @@ function ReminderForm({
       return undefined;
     }
   }
+  function sameSide(r: { notifyBoth?: boolean } | undefined) {
+    return Boolean(r?.notifyBoth) === Boolean(notifyBoth);
+  }
   function latestForPair() {
     const cached = readFormCache();
+    if (cached && sameSide(cached) && (cached.message || cached.time)) return cached;
     const listed = listReminders()
       .filter(
         (r) =>
           phoneDigits(r.ownerTen) === ownerTen &&
           phoneDigits(r.contactTen) === contactTen &&
-          Boolean(r.notifyBoth) === Boolean(notifyBoth),
+          sameSide(r),
       )
       .sort((a, b) => String(b.createdAt || b.time || "").localeCompare(String(a.createdAt || a.time || "")));
-    return cached || listed[0];
+    return listed[0];
   }
-  const existing = latestForPair();
-  const [row, setRow] = useState<Reminder>(
-    existing || blankReminder(ownerTen, contactTen, contactName, notifyBoth),
-  );
+  const [row, setRow] = useState<Reminder>(() => blankReminder(ownerTen, contactTen, contactName, notifyBoth));
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<"save" | "delete" | null>(null);
-  const [hasSaved, setHasSaved] = useState(Boolean(existing?.message || existing?.time));
+  const [hasSaved, setHasSaved] = useState(false);
 
   useEffect(() => {
     let stop = false;
@@ -107,7 +108,7 @@ function ReminderForm({
         const rows = Array.isArray(remote) ? remote : [];
         if (rows.length) mergeReminders(rows as Reminder[]);
         const cached = readFormCache();
-        if (cached && (cached.time || cached.message)) {
+        if (cached && sameSide(cached) && (cached.time || cached.message)) {
           setHasSaved(true);
           setRow({
             ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
@@ -122,7 +123,7 @@ function ReminderForm({
           return;
         }
         const hit = latestForPair();
-        if (hit) {
+        if (hit && sameSide(hit) && (hit.message || hit.time)) {
           setHasSaved(true);
           setRow({
             ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
@@ -134,6 +135,9 @@ function ReminderForm({
             time: String(hit.time || "09:00").slice(0, 5),
             message: String(hit.message || ""),
           });
+        } else {
+          setHasSaved(false);
+          setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
         }
       })
       .catch(() => undefined);
