@@ -95,11 +95,29 @@ function ReminderForm({
       .sort((a, b) => String(b.createdAt || b.time || "").localeCompare(String(a.createdAt || a.time || "")));
     return listed[0];
   }
-  const [row, setRow] = useState<Reminder>(() => blankReminder(ownerTen, contactTen, contactName, notifyBoth));
+  const [row, setRow] = useState<Reminder>(() => {
+    const hit = latestForPair();
+    if (hit && sameSide(hit)) {
+      return {
+        ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
+        ...hit,
+        notifyBoth,
+        contactName,
+        ownerTen,
+        contactTen,
+        time: String(hit.time || "09:00").slice(0, 5),
+        message: String(hit.message || ""),
+      };
+    }
+    return blankReminder(ownerTen, contactTen, contactName, notifyBoth);
+  });
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<"save" | "delete" | null>(null);
-  const [hasSaved, setHasSaved] = useState(false);
+  const [hasSaved, setHasSaved] = useState(() => {
+    const hit = latestForPair();
+    return Boolean(hit && sameSide(hit) && (hit.message || hit.id));
+  });
 
   useEffect(() => {
     let stop = false;
@@ -136,9 +154,6 @@ function ReminderForm({
             time: String(hit.time || "09:00").slice(0, 5),
             message: String(hit.message || ""),
           });
-        } else {
-          setHasSaved(false);
-          setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
         }
       })
       .catch(() => undefined);

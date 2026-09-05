@@ -960,9 +960,10 @@ export const listRemindersRemote = createServerFn({ method: "POST" })
       }
       const both =
         raw.notifyBoth === true ||
-        row.notify_both === true ||
-        row.notify_both === "t" ||
-        row.notify_both === "true" ||
+        raw.notifyBoth === "true" ||
+        (raw.notifyBoth !== false &&
+          raw.notifyBoth !== "false" &&
+          (row.notify_both === true || row.notify_both === "t" || row.notify_both === "true" || row.notify_both === 1));
         row.notify_both === 1;
       return {
         ...raw,
