@@ -91,6 +91,8 @@ function ReminderForm({
   );
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState<"save" | "delete" | null>(null);
+  const [hasSaved, setHasSaved] = useState(Boolean(existing?.message || existing?.time));
 
   useEffect(() => {
     let stop = false;
@@ -101,6 +103,7 @@ function ReminderForm({
         if (rows.length) mergeReminders(rows as Reminder[]);
         const cached = readFormCache();
         if (cached && (cached.time || cached.message)) {
+          setHasSaved(true);
           setRow({
             ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
             ...cached,
@@ -115,6 +118,7 @@ function ReminderForm({
         }
         const hit = latestForPair();
         if (hit) {
+          setHasSaved(true);
           setRow({
             ...blankReminder(ownerTen, contactTen, contactName, notifyBoth),
             ...hit,
@@ -141,6 +145,7 @@ function ReminderForm({
     if (saving) return;
     flushSync(() => {
       setSaving(true);
+      setBusy("save");
       setMsg(null);
     });
     const next = {
@@ -172,13 +177,16 @@ function ReminderForm({
       /* local copy kept */
     }
     setMsg(t("reminderSaved"));
+    setHasSaved(true);
     setSaving(false);
+    setBusy(null);
   }
 
   async function remove() {
     if (saving) return;
     flushSync(() => {
       setSaving(true);
+      setBusy("delete");
       setMsg(null);
     });
     const ids = new Set<string>();
@@ -217,8 +225,10 @@ function ReminderForm({
       /* ignore */
     }
     setRow(blankReminder(ownerTen, contactTen, contactName, notifyBoth));
+    setHasSaved(false);
     setMsg(null);
     setSaving(false);
+    setBusy(null);
   }
 
   return (
@@ -232,7 +242,7 @@ function ReminderForm({
         <div className="fixed inset-0 z-50 grid place-items-center bg-ink/50">
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-line bg-surface px-8 py-6">
             <Loader2 className="size-8 animate-spin text-accent" />
-            <p className="text-sm font-medium">{t("saving")}</p>
+            <p className="text-sm font-medium">{busy === "delete" ? "Deleting…" : t("saving")}</p>
             <p className="text-xs text-muted">{t("pleaseWait")}</p>
           </div>
         </div>
@@ -351,7 +361,7 @@ function ReminderForm({
             {t("cancel")}
           </Button>
         </div>
-        {row.message || row.id || existing ? (
+        {hasSaved ? (
           <button type="button" className="mt-3 text-xs text-danger" onClick={() => void remove()} disabled={saving}>
             {t("deleteDraft")}
           </button>
