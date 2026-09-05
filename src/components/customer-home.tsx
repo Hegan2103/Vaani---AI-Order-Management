@@ -71,19 +71,7 @@ export function CustomerHome() {
 
   const filtered = useMemo(() => {
     const dir = readDirContacts();
-    const book = dir ?? contacts.filter((c) => c.source === "phone");
-    let rows = dir != null || book.length ? [...book] : [...contacts];
-    const names = readBookNames();
-    if (!rows.length && Object.keys(names).length) {
-      rows = Object.entries(names)
-        .filter(([ten]) => ten.length === 10)
-        .map(([ten, name]) => ({
-          id: `book-${ten}`,
-          name,
-          phone: formatInPhone(ten),
-          source: "phone" as const,
-        }));
-    }
+    let rows = Array.isArray(dir) ? [...dir] : [];
     rows = rows.map((c) => ({ ...c, name: bookNameFor(c.phone, c.name) }));
     return rows.filter((c) => {
       const v = vendorForPhone(c.phone);

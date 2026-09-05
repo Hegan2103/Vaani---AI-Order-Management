@@ -1136,6 +1136,9 @@ export const useVaani = create<State>()(
         const disk = readShopIdentity(p.customerPhone || current.customerPhone);
         const name = (current.customerName || p.customerName || disk?.shopName || "").trim();
         const phone = (current.customerPhone || p.customerPhone || disk?.phone || "").trim();
+        const pTen = phoneDigits(p.customerPhone || disk?.phone || "");
+        const cTen = phoneDigits(current.customerPhone || phone || "");
+        const samePhone = pTen.length === 10 && pTen === cTen;
         return {
           ...current,
           role: p.role || current.role,
@@ -1151,11 +1154,11 @@ export const useVaani = create<State>()(
           shopSaved: Boolean(current.shopSaved || p.shopSaved || name),
           accountUserId: current.accountUserId || p.accountUserId || "",
           accountReady: Boolean(name || current.shopSaved || p.tickets?.length || current.tickets?.length),
-          tickets: mergeTicketLists(p.tickets ?? [], current.tickets ?? []),
-          incoming: mergeTicketLists(p.incoming ?? [], current.incoming ?? []),
+          tickets: samePhone ? mergeTicketLists(p.tickets ?? [], current.tickets ?? []) : current.tickets ?? [],
+          incoming: samePhone ? mergeTicketLists(p.incoming ?? [], current.incoming ?? []) : current.incoming ?? [],
           claimedVendorId: current.claimedVendorId || p.claimedVendorId || "",
-          contacts: readDirContacts() ?? current.contacts,
-          notices: current.notices?.length ? current.notices : p.notices ?? [],
+          contacts: samePhone ? readDirContacts() ?? current.contacts ?? [] : readDirContacts() ?? [],
+          notices: samePhone && current.notices?.length ? current.notices : samePhone ? p.notices ?? [] : [],
         };
       },
       partialize: (s) => ({
