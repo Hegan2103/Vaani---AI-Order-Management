@@ -3,8 +3,10 @@ import type { LineItem, LineKind } from "./types";
 const INQUIRY_WORDS =
   /\b(rate|price|cost|kitna|kitne|kitni|daam|bhao|भाव|कीमत|रेट|price of|ka rate|ka price|ka cost|enq|inquiry|quote)\b/i;
 
-const UNIT =
-  "kg|kilo|kilogram|bag|bags|strip|strips|litre|liter|ltr|metre|meter|mtr|piece|pcs|pc|box|boxes|case|cases|carton|cartons|sachet|bottle|bundle|cft|gram|gm|ml|pack|packs|unit|units|tin|tins|केस";
+const QTY_UNIT =
+  "bag|bags|strip|strips|litre|liter|ltr|metre|meter|mtr|piece|pcs|pc|box|boxes|case|cases|carton|cartons|sachet|bottle|bundle|cft|ml|pack|packs|unit|units|tin|tins|केस";
+
+const WEIGHT_UNIT = "kgs?|kilos?|kilograms?|gms?|grams?";
 
 export function inferKind(text: string): LineKind {
   return INQUIRY_WORDS.test(text) ? "inquiry" : "order";
@@ -19,15 +21,17 @@ function nameFromChunk(chunk: string, _quantity: number | null, qtyText?: string
 
 function parseChunk(chunk: string): LineItem {
   const kind = inferKind(chunk);
-  const weightMatch = chunk.match(/(\d+(?:\.\d+)?)\s*(kgs?|kilos?|kilograms?|gms?|grams?)\b/i);
+  const weightMatch = chunk.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${WEIGHT_UNIT})\\b`, "i"));
   const afterWeight = weightMatch
     ? chunk.slice((weightMatch.index || 0) + weightMatch[0].length)
     : "";
-  const afterQty = afterWeight.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})?\\b`, "i"));
+  const afterQty =
+    afterWeight.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${QTY_UNIT})\\b`, "i")) ||
+    afterWeight.match(/(\d+(?:\.\d+)?)\s*$/);
   const hasWeightThenQty = Boolean(weightMatch && afterQty?.[1]);
   const qtyMatch = hasWeightThenQty
     ? afterQty
-    : chunk.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNIT})\\b`, "i"));
+    : chunk.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${WEIGHT_UNIT}|${QTY_UNIT})\\b`, "i"));
   const trailingQty = hasWeightThenQty ? null : chunk.match(/(\d+(?:\.\d+)?)\s*$/);
   const keepStrength = /\d+\s*(mg|ml)\b/i.test(chunk);
   const quantity = hasWeightThenQty
