@@ -880,7 +880,10 @@ export const saveReminder = createServerFn({ method: "POST" })
     const owner = digits(r.ownerTen);
     const contact = digits(r.contactTen);
     try {
-      await sql.query(`delete from vaani_reminders where owner_ten = $1 and contact_ten = $2 and id <> $3`, [owner, contact, r.id]);
+      await sql.query(
+        `delete from vaani_reminders where owner_ten = $1 and contact_ten = $2 and id <> $3 and coalesce(notify_both, false) = $4`,
+        [owner, contact, r.id, both],
+      );
     } catch {
       /* keep going */
     }
@@ -1066,12 +1069,12 @@ export const processDueReminders = createServerFn({ method: "POST" })
       } catch {
         created = "";
       }
-      const key = `${digits(row.owner_ten)}:${digits(row.contact_ten)}`;
+      const key = `${digits(row.owner_ten)}:${digits(row.contact_ten)}:${row.notify_both ? "both" : "self"}`;
       const prev = latest.get(key);
       if (!prev || created > prev.created) latest.set(key, { created, id: row.id });
     }
     for (const row of rows) {
-      const key = `${digits(row.owner_ten)}:${digits(row.contact_ten)}`;
+      const key = `${digits(row.owner_ten)}:${digits(row.contact_ten)}:${row.notify_both ? "both" : "self"}`;
       if (latest.get(key)?.id !== row.id) continue;
       let raw: Record<string, unknown> = {};
       try {

@@ -64,7 +64,7 @@ function ReminderForm({
   const ownerTen = liveLoginTen() || readLoginTen();
   const contactTen = phoneDigits(contactPhone);
   function formKey() {
-    return `vaani-reminder-form:${phoneDigits(ownerTen)}:${phoneDigits(contactTen)}`;
+    return `vaani-reminder-form:${phoneDigits(ownerTen)}:${phoneDigits(contactTen)}:${notifyBoth ? "vendor" : "customer"}`;
   }
   function readFormCache(): Reminder | undefined {
     if (typeof window === "undefined" || ownerTen.length !== 10 || contactTen.length !== 10) return undefined;
@@ -81,7 +81,12 @@ function ReminderForm({
   function latestForPair() {
     const cached = readFormCache();
     const listed = listReminders()
-      .filter((r) => phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen)
+      .filter(
+        (r) =>
+          phoneDigits(r.ownerTen) === ownerTen &&
+          phoneDigits(r.contactTen) === contactTen &&
+          Boolean(r.notifyBoth) === Boolean(notifyBoth),
+      )
       .sort((a, b) => String(b.createdAt || b.time || "").localeCompare(String(a.createdAt || a.time || "")));
     return cached || listed[0];
   }
@@ -160,7 +165,11 @@ function ReminderForm({
       bells: {},
     };
     for (const old of listReminders().filter(
-      (r) => r.id !== next.id && phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen,
+      (r) =>
+        r.id !== next.id &&
+        phoneDigits(r.ownerTen) === ownerTen &&
+        phoneDigits(r.contactTen) === contactTen &&
+        Boolean(r.notifyBoth) === Boolean(notifyBoth),
     )) {
       deleteReminder(old.id);
       void deleteReminderRemote({ data: { id: old.id } }).catch(() => undefined);
@@ -198,7 +207,10 @@ function ReminderForm({
       /* ignore */
     }
     for (const old of listReminders().filter(
-      (r) => phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen,
+      (r) =>
+        phoneDigits(r.ownerTen) === ownerTen &&
+        phoneDigits(r.contactTen) === contactTen &&
+        Boolean(r.notifyBoth) === Boolean(notifyBoth),
     )) {
       ids.add(old.id);
     }
@@ -206,7 +218,13 @@ function ReminderForm({
       const remote = await listRemindersRemote({ data: { phone: ownerTen } });
       const rows = Array.isArray(remote) ? remote : [];
       for (const r of rows as Reminder[]) {
-        if (phoneDigits(r.ownerTen) === ownerTen && phoneDigits(r.contactTen) === contactTen && r.id) ids.add(r.id);
+        if (
+          phoneDigits(r.ownerTen) === ownerTen &&
+          phoneDigits(r.contactTen) === contactTen &&
+          Boolean(r.notifyBoth) === Boolean(notifyBoth) &&
+          r.id
+        )
+          ids.add(r.id);
       }
     } catch {
       /* local ids only */
