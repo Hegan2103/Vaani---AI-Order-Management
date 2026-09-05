@@ -1,7 +1,7 @@
 import { Pencil } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { INDUSTRY_LABEL, LANGUAGES, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
+import { INDUSTRY_LABEL, formatInPhone, phoneDigits } from "@/lib/vaani/seed";
 import { useT } from "@/lib/vaani/i18n";
 import { saveProfile } from "@/lib/vaani/account";
 import { liveLoginTen, readLoginTen, readShopIdentity, useVaani, type ShopIdentity } from "@/lib/vaani/store";
@@ -216,7 +216,6 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             {savedType === "individual" ? t("typeIndividual") : t("typeBusiness")}
             {savedType === "business" && savedIndustry ? ` · ${tradeLabel(savedIndustry)}` : ""}
             {savedVendor ? ` · ${t("listedVendor")}` : ` · ${t("asCustomer")}`}
-            {` · ${LANGUAGES.find((l) => l.id === savedLang)?.label ?? savedLang}`}
           </p>
           {shopMsg ? <p className="mt-2 text-sm text-ok">{shopMsg}</p> : null}
         </div>
@@ -277,23 +276,6 @@ export function ShopCard({ extra }: { extra?: ReactNode }) {
             {Object.keys(INDUSTRY_LABEL).map((k) => (
               <option key={k} value={k}>
                 {tradeLabel(k as Industry)}
-              </option>
-            ))}
-          </select>
-          <label className="mt-3 block text-xs text-muted">
-            {t("language")}
-            {extraFrozen ? ` · ${t("frozen")}` : ""}
-          </label>
-          <select
-            value={langDraft}
-            disabled={extraFrozen}
-            onChange={(e) => setLangDraft(e.target.value)}
-            className={extraFrozen ? frozenBox : box}
-            style={extraFrozen ? frozenStyle : undefined}
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
               </option>
             ))}
           </select>
