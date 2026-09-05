@@ -338,8 +338,7 @@ export function readAccountBackup(ten?: string, userId?: string): AccountBackup 
     if (ten && all[ten]?.shopName) return all[ten];
     if (ten && all[ten]) return all[ten];
     if (userId && all[`user:${userId}`]) return all[`user:${userId}`];
-    const values = Object.values(all);
-    return values.find((v) => v.shopName?.trim() || v.tickets?.length) ?? null;
+    return null;
   } catch {
     return null;
   }
@@ -927,7 +926,9 @@ export const useVaani = create<State>()(
       setAccountReady: (accountReady) => set({ accountReady }),
       resetForUser: (userId) =>
         set((s) => {
-          if (s.accountUserId === userId) return s;
+          const nextTen = phoneDigits(String(userId).replace(/^vaani-/, ""));
+          const prevTen = phoneDigits(s.customerPhone);
+          if (s.accountUserId === userId && (prevTen.length !== 10 || prevTen === nextTen)) return s;
           return {
             accountUserId: userId,
             accountReady: false,
