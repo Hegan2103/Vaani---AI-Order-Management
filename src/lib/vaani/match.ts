@@ -21,6 +21,42 @@ function nameFromChunk(chunk: string, _quantity: number | null, qtyText?: string
 
 function parseChunk(chunk: string): LineItem {
   const kind = inferKind(chunk);
+  const spoken = chunk.replace(INQUIRY_WORDS, " ").replace(/\s+/g, " ").trim() || chunk.trim();
+  const packed = spoken.match(
+    /^(.+?)\s+(\d+(?:\.\d+)?)\s*(kg|kgs|kilo|kilos|kilogram|kilograms|gm|gms|gram|grams)\s+(\d+(?:\.\d+)?)\s*(bag|bags|strip|strips|box|boxes|case|cases|carton|cartons|pack|packs|bottle|tin|tins|piece|pcs|pc|unit|units|केस)?$/i,
+  );
+  if (packed) {
+    const unitRaw = (packed[5] || "unit").toLowerCase();
+    const unit =
+      unitRaw === "cases" || unitRaw === "केस" || unitRaw === "carton" || unitRaw === "cartons"
+        ? "case"
+        : unitRaw === "boxes"
+          ? "box"
+          : unitRaw === "strips"
+            ? "strip"
+            : unitRaw === "bags"
+              ? "bag"
+              : unitRaw === "packs"
+                ? "pack"
+                : unitRaw === "tins"
+                  ? "tin"
+                  : unitRaw === "pcs" || unitRaw === "pc"
+                    ? "piece"
+                    : unitRaw;
+    return {
+      id: crypto.randomUUID(),
+      kind,
+      raw: chunk,
+      productName: `${packed[1].trim()} ${packed[2]}${packed[3]}`.replace(/\s+/g, " ").trim(),
+      catalogId: null,
+      quantity: Number(packed[4]),
+      unit,
+      status: "pending",
+      quotedPrice: null,
+      rejectReason: null,
+      confidence: 1,
+    };
+  }
   const weightMatch = chunk.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${WEIGHT_UNIT})\\b`, "i"));
   const afterWeight = weightMatch
     ? chunk.slice((weightMatch.index || 0) + weightMatch[0].length)
